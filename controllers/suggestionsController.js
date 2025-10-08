@@ -25,7 +25,7 @@ ${GROUP_LINK}
             const keyboard = new InlineKeyboard()
                 .url('📢 Присоединиться к группе', GROUP_LINK)
                 .row()
-                .text('⬅️ Назад', 'entities');
+                .text('⬅️ Назад', 'main_menu');
 
             // Если сообщение можно редактировать (callback query)
             if (ctx.callbackQuery) {
@@ -65,7 +65,7 @@ ${GROUP_LINK}
                 .row()
                 .text('✅ Я вступил(a)', 'joined_group')
                 .row()
-                .text('⬅️ Назад', 'entities');
+                .text('⬅️ Назад', 'main_menu');
 
             if (ctx.callbackQuery) {
                 await ctx.editMessageText(messageText, {
@@ -104,7 +104,7 @@ ${GROUP_LINK}
                 .text('💡 Предложить идею', 'suggest_idea')
                 .text('📢 Перейти в группу', 'go_to_group')
                 .row()
-                .text('⬅️ Назад', 'entities');
+                .text('⬅️ Назад', 'main_menu');
 
             await ctx.editMessageText(messageText, {
                 reply_markup: keyboard,

@@ -576,7 +576,7 @@ export class PriceMonitoringService {
                 const priceChange = this.calculatePriceChange(previousPrice, currentPrice);
 
                 // Проверяем превышение порога threshold
-                if (priceChange < 0) {
+                if (priceChange <= -threshold) {
                     alerts.push({
                         user_id: userId,
                         product_id: product.nm_id,

@@ -20,7 +20,7 @@ export const adminController = {
             .row()
             .text('📊 Статистика системы', 'admin_stats')
             .row()
-            .text('⬅️ Назад', 'entities');
+            .text('⬅️ Назад', 'main_menu');
 
         if (ctx.callbackQuery) {
             await ctx.editMessageText(message, {

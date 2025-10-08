@@ -69,7 +69,7 @@ export class YooMoneyService {
         const params = new URLSearchParams({
             receiver: this.receiver,
             'quickpay-form': 'donate',
-            targets: `Подписка на TradeBot (${orderNumber})`,
+            targets: `Подписка на WBBot (${orderNumber})`,
             sum: amount,
             label: this.generateYooMoneyLabel(orderNumber),
             comment: comment,

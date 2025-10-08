@@ -230,7 +230,7 @@ export const subscriptionController = {
                 .row()
                 .text('📋 История заказов', 'order_history')
                 .row()
-                .text('⬅️ Назад', 'entities');
+                .text('⬅️ Назад', 'main_menu');
 
             // Правильная проверка на наличие callbackQuery
             if (ctx.callbackQuery) {
