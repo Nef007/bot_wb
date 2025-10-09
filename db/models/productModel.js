@@ -4,17 +4,64 @@ export const productModel = {
     /**
      * Создать или обновить товар
      */
+    // Временно замените метод upsert на эту версию в productModel
     upsert(productData) {
         const db = getDB();
-        const stmt = db.prepare(`
-            INSERT OR REPLACE INTO products 
-            (nm_id, name, brand, brand_id, category_id, current_price, rating, 
-             feedbacks_count, image_url, supplier, supplier_id, last_updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-        `);
 
-        return stmt.run(
-            productData.nm_id,
+        // Явный UPDATE
+        const updateResult = db
+            .prepare(
+                `
+        UPDATE products 
+        SET current_price = ?, last_updated_at = CURRENT_TIMESTAMP
+        WHERE nm_id = ?
+    `
+            )
+            .run(productData.current_price, productData.nm_id);
+
+        // Если не обновилось - INSERT
+        if (updateResult.changes === 0) {
+            return db
+                .prepare(
+                    `
+            INSERT INTO products 
+            (nm_id, name, brand, brand_id, category_id, current_price, rating, 
+             feedbacks_count, image_url, supplier, supplier_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `
+                )
+                .run(
+                    productData.nm_id,
+                    productData.name,
+                    productData.brand,
+                    productData.brandId,
+                    productData.category_id,
+                    productData.current_price,
+                    productData.rating || 0,
+                    productData.feedbacks_count || 0,
+                    productData.image_url,
+                    productData.supplier,
+                    productData.supplier_id
+                );
+        }
+
+        return updateResult;
+    },
+
+    upsertExplicit(productData) {
+        const db = getDB();
+
+        // Сначала пробуем обновить
+        const updateStmt = db.prepare(`
+        UPDATE products 
+        SET name = ?, brand = ?, brand_id = ?, category_id = ?, 
+            current_price = ?, rating = ?, feedbacks_count = ?, 
+            image_url = ?, supplier = ?, supplier_id = ?, 
+            last_updated_at = CURRENT_TIMESTAMP
+        WHERE nm_id = ?
+    `);
+
+        const updateResult = updateStmt.run(
             productData.name,
             productData.brand,
             productData.brandId,
@@ -24,8 +71,35 @@ export const productModel = {
             productData.feedbacks_count || 0,
             productData.image_url,
             productData.supplier,
-            productData.supplier_id
+            productData.supplier_id,
+            productData.nm_id
         );
+
+        // Если не обновили ни одной строки, значит товара нет - создаем
+        if (updateResult.changes === 0) {
+            const insertStmt = db.prepare(`
+            INSERT INTO products 
+            (nm_id, name, brand, brand_id, category_id, current_price, rating, 
+             feedbacks_count, image_url, supplier, supplier_id, first_seen_at, last_updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        `);
+
+            return insertStmt.run(
+                productData.nm_id,
+                productData.name,
+                productData.brand,
+                productData.brandId,
+                productData.category_id,
+                productData.current_price,
+                productData.rating || 0,
+                productData.feedbacks_count || 0,
+                productData.image_url,
+                productData.supplier,
+                productData.supplier_id
+            );
+        }
+
+        return updateResult;
     },
 
     /**

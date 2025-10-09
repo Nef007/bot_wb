@@ -1,11 +1,12 @@
 import { getDB } from '../connection.js';
 
+const db = getDB();
+
 export const priceHistoryModel = {
     /**
      * Добавить запись в историю цен
      */
     create(productId, price) {
-        const db = getDB();
         db.prepare(
             `
             INSERT INTO price_history (product_id, price) 
@@ -18,7 +19,6 @@ export const priceHistoryModel = {
      * Получить историю цен товара
      */
     findByProductId(productId, limit = 50) {
-        const db = getDB();
         return db
             .prepare(
                 `
@@ -35,42 +35,48 @@ export const priceHistoryModel = {
      * Получить последнюю цену товара
      */
     getLastPrice(productId) {
-        const db = getDB();
         try {
+            // Основной запрос
             const result = db
                 .prepare(
                     `
-            SELECT * FROM price_history 
-            WHERE product_id = ? 
-            ORDER BY id DESC 
-            LIMIT 1
-        `
+                SELECT * FROM price_history 
+                WHERE product_id = ? 
+                ORDER BY id DESC 
+                LIMIT 1
+            `
                 )
                 .get(productId);
 
-            // console.log(`📋 getLastPrice для ${productId}:`, result);
             return result;
         } catch (error) {
             console.error('❌ Ошибка получения последней цены:', error.message);
             return null;
         }
     },
-
     getLastTwoPrices(productId) {
         const db = getDB();
         try {
             const results = db
                 .prepare(
                     `
-            SELECT * FROM price_history 
-            WHERE product_id = ? 
-            ORDER BY id DESC 
-            LIMIT 2
-        `
+                SELECT * FROM price_history 
+                WHERE product_id = ? 
+                ORDER BY id DESC 
+                LIMIT 2
+            `
                 )
                 .all(productId);
 
-            // console.log(`📋 getLastTwoPrices для ${productId}:`, results);
+            //  console.log(`📋 getLastTwoPrices для ${productId}: ${results.length} записей`);
+
+            // Отладка: покажем что возвращается
+            // if (results.length > 0) {
+            //     results.forEach((record, index) => {
+            //         console.log(`   ${index + 1}. ID: ${record.id}, Цена: ${record.price}, Время: ${record.timestamp}`);
+            //     });
+            // }
+
             return results;
         } catch (error) {
             console.error('❌ Ошибка получения двух последних цен:', error.message);

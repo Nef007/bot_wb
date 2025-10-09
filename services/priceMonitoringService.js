@@ -14,7 +14,7 @@ const client = wrapper(axios.create({ jar }));
 
 export class PriceMonitoringService {
     constructor() {
-        this.scanDelay = 2000;
+        this.scanDelay = 3000;
         this.maxPages = 5;
         this.currentlyScanning = new Set(); //
         // Инициализируем axios с поддержкой кук
@@ -248,14 +248,14 @@ export class PriceMonitoringService {
             });
 
             // Проверяем структуру ответа
-            console.log('📊 Структура ответа:', {
-                hasMetadata: !!response.data?.metadata,
-                catalogType: response.data?.metadata?.catalog_type,
-                normquery: response.data?.metadata?.normquery,
-                name: response.data?.metadata?.name,
-                catalog_value: response.data?.metadata?.catalog_value?.substring(0, 50) + '...',
-                productCount: response.data?.products?.length || 0,
-            });
+            // console.log('📊 Структура ответа:', {
+            //     hasMetadata: !!response.data?.metadata,
+            //     catalogType: response.data?.metadata?.catalog_type,
+            //     normquery: response.data?.metadata?.normquery,
+            //     name: response.data?.metadata?.name,
+            //     catalog_value: response.data?.metadata?.catalog_value?.substring(0, 50) + '...',
+            //     productCount: response.data?.products?.length || 0,
+            // });
 
             // Логируем первые 3 товара для отладки
             if (response.data?.products && response.data.products.length > 0) {
@@ -473,7 +473,7 @@ export class PriceMonitoringService {
         let savedCount = 0;
         let errorCount = 0;
 
-        console.log(`💾 Начинаем сохранение ${products.length} товаров...`);
+        //  console.log(`💾 Начинаем сохранение ${products.length} товаров...`);
 
         for (const product of products) {
             try {
@@ -495,7 +495,7 @@ export class PriceMonitoringService {
                     continue;
                 }
 
-                console.log(`📝 Сохраняем товар: ${product.name}, цена: ${product.current_price} руб.`);
+                //  console.log(`📝 Сохраняем товар: ${product.name}, цена: ${product.current_price} руб.`);
 
                 // Сохраняем товар
                 try {
@@ -506,8 +506,11 @@ export class PriceMonitoringService {
 
                     if (product.current_price > 0 && product.current_price !== lastPrice) {
                         priceHistoryModel.create(product.nm_id, product.current_price);
+                        console.log(
+                            `✅ Товар сохранен в products цена изменилась: ${product.nm_id}  ${product.current_price} =>  ${lastPrice} `
+                        );
                     }
-                    console.log(`✅ Товар сохранен в products: ${product.nm_id}`);
+                    // console.log(`✅ Товар сохранен в products: ${product.nm_id}`);
                 } catch (upsertError) {
                     console.error(`❌ Ошибка upsert товара ${product.nm_id}:`, upsertError.message);
                     errorCount++;
@@ -515,14 +518,14 @@ export class PriceMonitoringService {
                 }
 
                 // Сохраняем историю цен
-                if (product.current_price > 0) {
-                    try {
-                        priceHistoryModel.create(product.nm_id, product.current_price);
-                        //   console.log(`✅ История цен сохранена: ${product.nm_id} - ${product.current_price} руб.`);
-                    } catch (historyError) {
-                        console.error(`❌ Ошибка сохранения истории цен ${product.nm_id}:`, historyError.message);
-                    }
-                }
+                // if (product.current_price > 0) {
+                //     try {
+                //         priceHistoryModel.create(product.nm_id, product.current_price);
+                //         //   console.log(`✅ История цен сохранена: ${product.nm_id} - ${product.current_price} руб.`);
+                //     } catch (historyError) {
+                //         console.error(`❌ Ошибка сохранения истории цен ${product.nm_id}:`, historyError.message);
+                //     }
+                // }
 
                 savedCount++;
             } catch (error) {
@@ -531,7 +534,7 @@ export class PriceMonitoringService {
             }
         }
 
-        console.log(`💾 Итог сохранения: ${savedCount} успешно, ${errorCount} ошибок из ${products.length} товаров`);
+        //  console.log(`💾 Итог сохранения: ${savedCount} успешно, ${errorCount} ошибок из ${products.length} товаров`);
     }
 
     /**
@@ -550,13 +553,6 @@ export class PriceMonitoringService {
                 const lastTwoPrices = priceHistoryModel.getLastTwoPrices(product.nm_id);
 
                 if (!lastTwoPrices || lastTwoPrices.length < 2) {
-                    if (product.nm_id === TARGET_PRODUCT_ID) {
-                        console.log(
-                            `🎯🆕 ЦЕЛЕВОЙ ТОВАР - Недостаточно данных: ${
-                                lastTwoPrices ? lastTwoPrices.length : 0
-                            } записей`
-                        );
-                    }
                     continue;
                 }
 
@@ -570,7 +566,7 @@ export class PriceMonitoringService {
                     continue;
                 }
 
-                console.log(`🎯 ЦЕНЫ РАЗНЫЕ: ${previousPrice} → ${currentPrice}`);
+                console.log(`🎯 ЦЕНЫ РАЗНЫЕ: ${product.nm_id}  ${previousPrice} → ${currentPrice}`);
 
                 // Рассчитываем изменение цены в процентах
                 const priceChange = this.calculatePriceChange(previousPrice, currentPrice);
@@ -619,11 +615,13 @@ export class PriceMonitoringService {
         return `
 ${changeColor} <b>Изменение цены</b>
 
+
+<b>${alert.product_id}</b>
 📦 <b>${alert.product_name}</b>
 🏷️ Бренд: ${alert.brand || 'Не указан'}
 📂 Категория: ${categoryName}
 
-💰 <b>Цена:</b> ${alert.old_price} руб. → ${alert.new_price} руб.
+💰 <b>Цена:</b> ${alert.old_price} руб. () → ${alert.new_price} руб. ()
 ${changeIcon} <b>Изменение:</b> ${Math.abs(alert.percent_change)}% ${changeType}
 
 ⚡ <b>Порог уведомления:</b> ${alert.threshold}%
