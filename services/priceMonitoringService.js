@@ -558,8 +558,12 @@ export class PriceMonitoringService {
 
                 // Деструктурируем массив
                 const [currentRecord, previousRecord] = lastTwoPrices;
-                const previousPrice = previousRecord.price; // Предыдущая цена
+                const previousPrice = previousRecord.price; // Предыдущая цена timestamp
+
                 const currentPrice = currentRecord.price; // Текущая цена
+
+                const currentTime = currentRecord.timestamp;
+                const previousTime = previousRecord.timestamp;
 
                 // Пропускаем если цены одинаковые
                 if (previousPrice === currentPrice) {
@@ -581,6 +585,8 @@ export class PriceMonitoringService {
                         image_url: product.image_url,
                         old_price: previousPrice,
                         new_price: currentPrice,
+                        old_time: previousTime,
+                        new_time: currentTime,
                         percent_change: priceChange,
                         threshold: threshold,
                     });
@@ -621,7 +627,9 @@ ${changeColor} <b>Изменение цены</b>
 🏷️ Бренд: ${alert.brand || 'Не указан'}
 📂 Категория: ${categoryName}
 
-💰 <b>Цена:</b> ${alert.old_price} руб. () → ${alert.new_price} руб. ()
+💰 <b>Цена:</b> ${alert.old_price} руб. (${dayjs(alert.old_time).format('DD.MM.YYYY HH:mm')}) → ${
+            alert.new_price
+        } руб. (${dayjs(alert.new_time).format('DD.MM.YYYY HH:mm')})
 ${changeIcon} <b>Изменение:</b> ${Math.abs(alert.percent_change)}% ${changeType}
 
 ⚡ <b>Порог уведомления:</b> ${alert.threshold}%
