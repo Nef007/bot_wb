@@ -208,6 +208,13 @@ export class PriceMonitoringService {
     async checkAndSendNotifications(product, oldPrice, subscriptions, category, bot) {
         const priceChange = this.calculatePriceChange(oldPrice, product.current_price);
 
+        // Получаем временные метки для старой и новой цены
+        const lastTwoPrices = priceHistoryModel.getLastTwoPrices(product.nm_id);
+        const [currentRecord, previousRecord] = lastTwoPrices || [];
+
+        const oldTime = previousRecord ? previousRecord.timestamp : new Date();
+        const newTime = currentRecord ? currentRecord.timestamp : new Date();
+
         // Фильтруем подписки где изменение цены превышает порог
         const subscriptionsToNotify = subscriptions.filter(
             (subscription) => priceChange <= -subscription.alert_threshold
@@ -229,6 +236,8 @@ export class PriceMonitoringService {
                 image_url: product.image_url,
                 old_price: oldPrice,
                 new_price: product.current_price,
+                old_time: oldTime,
+                new_time: newTime,
                 percent_change: priceChange,
                 threshold: subscription.alert_threshold,
             };
@@ -469,7 +478,9 @@ ${changeColor} <b>Изменение цены</b>
 🏷️ Бренд: ${alert.brand || 'Не указан'}
 📂 Категория: ${categoryName}
 
-💰 <b>Цена:</b> ${alert.old_price} руб. → ${alert.new_price} руб.
+💰 <b>Цена:</b> ${alert.old_price} руб. (${dayjs(alert.old_time).format('DD.MM.YYYY HH:mm')}) → ${
+            alert.new_price
+        } руб. (${dayjs(alert.new_time).format('DD.MM.YYYY HH:mm')})
 ${changeIcon} <b>Изменение:</b> ${Math.abs(alert.percent_change)}% ${changeType}
 
 ⚡ <b>Порог уведомления:</b> ${alert.threshold}%
