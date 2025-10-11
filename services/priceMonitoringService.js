@@ -8,6 +8,7 @@ import { priceHistoryModel } from '../db/models/priceHistoryModel.js';
 import dayjs from 'dayjs';
 import { wrapper } from 'axios-cookiejar-support';
 import { CookieJar } from 'tough-cookie';
+import { telegramNotificationService } from './telegramNotificationService.js';
 
 const jar = new CookieJar();
 const client = wrapper(axios.create({ jar }));
@@ -16,8 +17,7 @@ export class PriceMonitoringService {
     constructor() {
         this.scanDelay = 3000;
         this.maxPages = 5;
-        this.currentlyScanning = new Set(); //
-        // Инициализируем axios с поддержкой кук
+        this.currentlyScanning = new Set();
         this.initAxiosWithCookies();
     }
 
@@ -33,13 +33,10 @@ export class PriceMonitoringService {
                     withCredentials: true,
                 })
             );
-
-            // Устанавливаем базовые куки как в браузере
             this.setInitialCookies();
             console.log('✅ Axios с поддержкой кук инициализирован');
         } catch (error) {
             console.error('❌ Ошибка инициализации axios с куками:', error.message);
-            // Fallback - используем обычный axios
             this.axiosWithCookies = axios;
         }
     }
@@ -49,8 +46,6 @@ export class PriceMonitoringService {
      */
     setInitialCookies() {
         const baseUrl = 'https://www.wildberries.ru';
-
-        // Базовые куки которые есть в браузере
         const initialCookies = [
             `wb__lang=ru; Domain=.wildberries.ru; Path=/`,
             `wbx__navigatorInfoSended=true; Domain=.wildberries.ru; Path=/`,
@@ -91,13 +86,14 @@ export class PriceMonitoringService {
                 return;
             }
 
-            // Группируем подписки по категориям чтобы избежать дублирования
-            const uniqueCategories = this.groupSubscriptionsByCategory(activeSubscriptions);
-            console.log(`🎯 Уникальных категорий для сканирования: ${uniqueCategories.size}`);
+            // Группируем подписки по категориям
+            const categoriesMap = this.groupSubscriptionsByCategory(activeSubscriptions);
+            console.log(`🎯 Уникальных категорий для сканирования: ${categoriesMap.size}`);
 
-            for (const [categoryId, subscriptions] of uniqueCategories) {
+            // Сканируем каждую категорию
+            for (const [categoryId, subscriptions] of categoriesMap) {
                 try {
-                    await this.processCategory(categoryId, subscriptions, bot);
+                    await this.scanAndProcessCategory(categoryId, subscriptions, bot);
                     await this.delay(1000);
                 } catch (error) {
                     console.error(`❌ Ошибка обработки категории ${categoryId}:`, error.message);
@@ -110,24 +106,25 @@ export class PriceMonitoringService {
         }
     }
 
+    /**
+     * Группировка подписок по категориям
+     */
     groupSubscriptionsByCategory(subscriptions) {
         const categories = new Map();
-
         for (const subscription of subscriptions) {
             const categoryId = subscription.category_id;
-
             if (!categories.has(categoryId)) {
                 categories.set(categoryId, []);
             }
-
             categories.get(categoryId).push(subscription);
         }
-
         return categories;
     }
 
-    async processCategory(categoryId, subscriptions, bot) {
-        // Проверяем не сканируется ли уже эта категория
+    /**
+     * Сканирование и обработка категории
+     */
+    async scanAndProcessCategory(categoryId, subscriptions, bot) {
         if (this.currentlyScanning.has(categoryId)) {
             console.log(`⏭️ Категория ${categoryId} уже сканируется, пропускаем`);
             return;
@@ -145,26 +142,21 @@ export class PriceMonitoringService {
             console.log(`\n🔍 Сканируем категорию: ${category.name} (ID: ${categoryId})`);
             console.log(`👥 Подписчиков: ${subscriptions.length}`);
 
-            // Берем настройки сканирования из первой подписки (можно выбрать самые агрессивные настройки)
-            // const mainSubscription = subscriptions[0];
+            // Определяем количество страниц для сканирования
             const scanPages = Math.max(...subscriptions.map((s) => s.scan_pages || 10));
 
-            // Сканируем товары категории один раз
+            // Сканируем товары
             const products = await this.scanCategoryProducts(category, scanPages);
-            console.log(`📦 Найдено товаров: ${products.length} в категории ${category.name}`);
+            console.log(`📦 Найдено товаров: ${products.length}`);
 
             if (products.length === 0) {
                 console.log(`ℹ️ В категории ${category.name} не найдено товаров`);
                 return;
             }
 
-            // Для каждого пользователя анализируем изменения по его порогу
-            for (const subscription of subscriptions) {
-                try {
-                    await this.analyzeAndNotifyUser(subscription, products, category, bot);
-                } catch (error) {
-                    console.error(`❌ Ошибка анализа для пользователя ${subscription.user_id}:`, error.message);
-                }
+            // Обрабатываем каждый товар - сохраняем и проверяем изменения цен
+            for (const product of products) {
+                await this.processProduct(product, subscriptions, category, bot);
             }
 
             // Обновляем время последнего сканирования для всех подписок
@@ -172,216 +164,95 @@ export class PriceMonitoringService {
                 await userCategorySubscriptionModel.updateLastScan(subscription.id);
             }
         } finally {
-            // Всегда снимаем блокировку
             this.currentlyScanning.delete(categoryId);
         }
     }
 
     /**
-     * Анализ и уведомление для конкретного пользователя
+     * Обработка одного товара
      */
-    async analyzeAndNotifyUser(subscription, products, category, bot) {
-        const alerts = await this.analyzePriceChanges(products, subscription.alert_threshold, subscription.user_id);
+    async processProduct(product, subscriptions, category, bot) {
+        try {
+            if (!product.nm_id || !product.current_price || product.current_price === 0) {
+                return;
+            }
 
-        // Отправляем уведомления если есть изменения
-        if (alerts.length > 0) {
-            await this.sendPriceAlerts(alerts, subscription, bot);
+            // Сохраняем/обновляем товар в базе
+            await productModel.upsert(product);
+
+            // Получаем предыдущую цену
+            const lastPriceRecord = priceHistoryModel.getLastPrice(product.nm_id);
+            const lastPrice = lastPriceRecord ? lastPriceRecord.price : null;
+
+            // Если цена изменилась - сохраняем новую цену и проверяем уведомления
+            if (lastPrice === null || product.current_price !== lastPrice) {
+                console.log(`💰 Изменение цены: ${product.nm_id} ${lastPrice || 'новый'} → ${product.current_price}`);
+
+                // Сохраняем новую цену в историю
+                await priceHistoryModel.create(product.nm_id, product.current_price);
+
+                // Если это не первый раз когда видим товар (была предыдущая цена)
+                if (lastPrice !== null) {
+                    // Проверяем для каждого пользователя нужно ли отправлять уведомление
+                    await this.checkAndSendNotifications(product, lastPrice, subscriptions, category, bot);
+                }
+            }
+        } catch (error) {
+            console.error(`❌ Ошибка обработки товара ${product.nm_id}:`, error.message);
         }
-
-        console.log(`✅ Пользователь ${subscription.user_id}: ${alerts.length} уведомлений`);
     }
 
     /**
-     * Получение товаров со страницы категории - ИСПРАВЛЕННАЯ ВЕРСИЯ
+     * Проверка и отправка уведомлений
      */
-    async fetchCategoryPage(category, page = 1) {
-        try {
-            // Формируем правильный query параметр
-            const query = this.buildCategoryQuery(category);
-            console.log(`🎯 Сформирован query: ${query}`);
+    async checkAndSendNotifications(product, oldPrice, subscriptions, category, bot) {
+        const priceChange = this.calculatePriceChange(oldPrice, product.current_price);
 
-            const url = 'https://u-search.wb.ru/exactmatch/ru/common/v18/search';
+        // Фильтруем подписки где изменение цены превышает порог
+        const subscriptionsToNotify = subscriptions.filter(
+            (subscription) => priceChange <= -subscription.alert_threshold
+        );
 
-            const params = {
-                ab_testid: 'popular_sort',
-                ab_testing: 'false',
-                appType: 1,
-                curr: 'rub',
-                dest: -1257786,
-                inheritFilters: 'false',
-                lang: 'ru',
-                page: page,
-                query: query,
-                resultset: 'catalog',
-                sort: 'popular',
-                spp: 30,
-                suppressSpellcheck: 'false',
+        if (subscriptionsToNotify.length === 0) {
+            return;
+        }
+
+        console.log(`📨 Найдено ${subscriptionsToNotify.length} подписок для уведомления о товаре ${product.nm_id}`);
+
+        // Создаем уведомления для каждой подписки
+        const messages = subscriptionsToNotify.map((subscription) => {
+            const alert = {
+                user_id: subscription.user_id,
+                product_id: product.nm_id,
+                product_name: product.name,
+                brand: product.brand,
+                image_url: product.image_url,
+                old_price: oldPrice,
+                new_price: product.current_price,
+                percent_change: priceChange,
+                threshold: subscription.alert_threshold,
             };
 
-            console.log(`🔗 Запрос с куками: ${url}?${new URLSearchParams(params)}`);
+            // Сохраняем уведомление в базу
+            this.saveAlertToDatabase(alert);
 
-            // Генерируем уникальные ID как в браузере
-            const timestamp = Math.floor(Date.now() / 1000);
-            const queryId = `qid${timestamp}${Math.random().toString().substring(2, 12)}`;
+            const message = this.formatAlertMessage(alert, category.name);
 
-            // Используем axios с поддержкой кук
-            const response = await this.axiosWithCookies.get(url, {
-                params: params,
-                timeout: 20000,
-                withCredentials: true, // Включаем отправку кук
-                headers: {
-                    'User-Agent':
-                        'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 YaBrowser/25.8.0.0 Safari/537.36',
-                    Accept: '*/*',
-                    'Accept-Language': 'ru,en;q=0.9',
-                    'Accept-Encoding': 'gzip, deflate, br',
-                    Referer: `https://www.wildberries.ru/catalog/elektronika/smart-chasy?sort=popular&page=${page}`,
-                    Origin: 'https://www.wildberries.ru',
-                    'Sec-Fetch-Dest': 'empty',
-                    'Sec-Fetch-Mode': 'cors',
-                    'Sec-Fetch-Site': 'cross-site',
-                    Priority: 'u=1, i',
-                    // КРИТИЧЕСКИ ВАЖНЫЕ ЗАГОЛОВКИ:
-                    'x-queryid': queryId,
-                    'x-userid': '0',
-                },
-            });
+            return {
+                bot: bot,
+                chatId: subscription.user_id,
+                text: message,
+                alertData: alert,
+            };
+        });
 
-            // Проверяем структуру ответа
-            // console.log('📊 Структура ответа:', {
-            //     hasMetadata: !!response.data?.metadata,
-            //     catalogType: response.data?.metadata?.catalog_type,
-            //     normquery: response.data?.metadata?.normquery,
-            //     name: response.data?.metadata?.name,
-            //     catalog_value: response.data?.metadata?.catalog_value?.substring(0, 50) + '...',
-            //     productCount: response.data?.products?.length || 0,
-            // });
-
-            // Логируем первые 3 товара для отладки
-            if (response.data?.products && response.data.products.length > 0) {
-                console.log('🔍 Первые 3 товара:');
-                response.data.products.slice(0, 3).forEach((product, index) => {
-                    console.log(`   ${index + 1}. ${product.name} (ID: ${product.id})`);
-                });
-            }
-
-            let products = [];
-
-            if (response.data?.data?.products) {
-                products = response.data.data.products;
-            } else if (response.data?.products) {
-                products = response.data.products;
-            } else if (Array.isArray(response.data)) {
-                products = response.data;
-            }
-
-            console.log(`✅ Найдено товаров: ${products.length}`);
-
-            return products.map((product) => this.normalizeProductData(product, category.id));
-        } catch (error) {
-            console.error(`❌ Ошибка запроса страницы ${page}:`, error.message);
-            if (error.response) {
-                console.error(`   Status: ${error.response.status}`);
-                console.error(`   Headers:`, error.response.headers);
-            }
-            return [];
-        }
+        // Добавляем сообщения в очередь отправки
+        telegramNotificationService.addMultipleToQueue(messages);
     }
 
     /**
-     * Формирование правильного query параметра для категории
+     * Сканирование товаров категории
      */
-    buildCategoryQuery(category) {
-        // Если есть search_query - используем его (самый правильный способ)
-        if (category.search_query) {
-            console.log(`🎯 Используем search_query из базы: ${category.search_query}`);
-            return category.search_query;
-        }
-
-        // Если в базе уже есть правильный query - используем его
-        if (category.query && category.query.includes('menu_redirect_subject_v2')) {
-            console.log(`🎯 Используем query из базы: ${category.query}`);
-            return category.query;
-        }
-
-        // Иначе формируем query по шаблону: menu_redirect_subject_v2_{id} {name}
-        console.log(`🎯 Формируем query автоматически: menu_redirect_subject_v2_${category.id} ${category.name}`);
-        return `menu_redirect_subject_v2_${category.id} ${category.name}`;
-    }
-
-    /**
-     * Нормализация данных товара
-     */
-    normalizeProductData(productData, categoryId) {
-        //  console.log(`🔍 Товар: ${productData.name}`);
-
-        // Определяем цену - ОСНОВНОЙ СПОСОБ ЧЕРЕЗ sizes[0].price.product
-        let priceU = 0;
-
-        // Вариант 1: Используем product цену из sizes (основной способ)
-        if (productData.sizes && productData.sizes.length > 0) {
-            const firstSize = productData.sizes[0];
-
-            // Используем product цену (цена со скидкой)
-            if (firstSize.price?.product && firstSize.price.product > 0) {
-                priceU = firstSize.price.product;
-                //    console.log(`💰 Используем sizes[0].price.product: ${priceU}`);
-            }
-            // Резервный вариант: basic цена
-            else if (firstSize.price?.basic && firstSize.price.basic > 0) {
-                priceU = firstSize.price.basic;
-                //    console.log(`💰 Используем sizes[0].price.basic: ${priceU}`);
-            } else {
-                console.log('❌ Все цены в sizes равны 0 или отсутствуют:', {
-                    product: firstSize.price?.product,
-                    basic: firstSize.price?.basic,
-                    rank: firstSize.rank,
-                });
-            }
-        }
-        // Вариант 2: Прямые поля (резервный способ)
-        else if (productData.salePriceU && productData.salePriceU > 0) {
-            priceU = productData.salePriceU;
-            //  console.log(`💰 Используем salePriceU: ${priceU}`);
-        } else if (productData.priceU && productData.priceU > 0) {
-            priceU = productData.priceU;
-            //  console.log(`💰 Используем priceU: ${priceU}`);
-        }
-
-        // Конвертируем в рубли (цена приходит в копейках)
-        const priceInRubles = priceU ? Math.round(priceU / 100) : 0;
-
-        if (priceInRubles === 0) {
-            console.log(`❌ НЕ НАЙДЕНА ЦЕНА для товара: ${productData.name}`);
-            console.log(`🔍 Доступные поля:`, {
-                hasSizes: !!productData.sizes,
-                sizeCount: productData.sizes ? productData.sizes.length : 0,
-                sizeProductPrice: productData.sizes?.[0]?.price?.product,
-                sizeBasicPrice: productData.sizes?.[0]?.price?.basic,
-                sizeRank: productData.sizes?.[0]?.rank,
-                salePriceU: productData.salePriceU,
-                priceU: productData.priceU,
-            });
-        } else {
-            // console.log(`💰 Итоговая цена: ${priceInRubles} руб.`);
-        }
-
-        const normalizedProduct = {
-            nm_id: productData.id,
-            name: productData.name || 'Неизвестный товар',
-            brand: productData.brand || '',
-            brandId: productData.brandId || 0,
-            category_id: categoryId,
-            current_price: priceInRubles,
-            rating: productData.rating || productData.reviewRating || 0,
-            feedbacks_count: productData.feedbacks || productData.feedbackCount || 0,
-            image_url: this.getProductImageUrl(productData.id),
-            supplier: productData.supplier || '',
-            supplier_id: productData.supplierId || 0,
-        };
-
-        return normalizedProduct;
-    }
     async scanCategoryProducts(category, pagesToScan = 10) {
         const allProducts = [];
         const actualPages = Math.min(pagesToScan, this.maxPages);
@@ -398,29 +269,7 @@ export class PriceMonitoringService {
                 }
 
                 console.log(`📊 Страница ${page}: ${products.length} товаров`);
-
-                // Для первых 3 товаров покажем детальную информацию о структуре
-                if (page === 1 && products.length > 0) {
-                    console.log('🔍 ДЕТАЛЬНАЯ ОТЛАДКА ПЕРВЫХ ТОВАРОВ:');
-                    for (let i = 0; i < Math.min(3, products.length); i++) {
-                        const product = products[i];
-                        console.log(`📦 Товар ${i + 1}: ${product.name}`);
-                        console.log(
-                            `🎯 Структура sizes:`,
-                            product.sizes?.[0]
-                                ? {
-                                      rank: product.sizes[0].rank,
-                                      price: product.sizes[0].price,
-                                  }
-                                : 'Нет sizes'
-                        );
-                    }
-                }
-
                 allProducts.push(...products);
-
-                // Сохраняем товары в базу
-                await this.saveProductsToDatabase(products, category.id);
 
                 // Задержка между страницами
                 if (page < actualPages) {
@@ -434,6 +283,134 @@ export class PriceMonitoringService {
 
         return allProducts;
     }
+
+    /**
+     * Получение товаров со страницы категории
+     */
+    async fetchCategoryPage(category, page = 1) {
+        try {
+            const query = this.buildCategoryQuery(category);
+            console.log(`🎯 Сформирован query: ${query}`);
+
+            const url = 'https://u-search.wb.ru/exactmatch/ru/common/v18/search';
+            const params = {
+                ab_testid: 'popular_sort',
+                ab_testing: 'false',
+                appType: 1,
+                curr: 'rub',
+                dest: -1257786,
+                inheritFilters: 'false',
+                lang: 'ru',
+                page: page,
+                query: query,
+                resultset: 'catalog',
+                sort: 'popular',
+                spp: 30,
+                suppressSpellcheck: 'false',
+            };
+
+            const timestamp = Math.floor(Date.now() / 1000);
+            const queryId = `qid${timestamp}${Math.random().toString().substring(2, 12)}`;
+
+            const response = await this.axiosWithCookies.get(url, {
+                params: params,
+                timeout: 20000,
+                withCredentials: true,
+                headers: {
+                    'User-Agent':
+                        'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 YaBrowser/25.8.0.0 Safari/537.36',
+                    Accept: '*/*',
+                    'Accept-Language': 'ru,en;q=0.9',
+                    'Accept-Encoding': 'gzip, deflate, br',
+                    Referer: `https://www.wildberries.ru/catalog/elektronika/smart-chasy?sort=popular&page=${page}`,
+                    Origin: 'https://www.wildberries.ru',
+                    'Sec-Fetch-Dest': 'empty',
+                    'Sec-Fetch-Mode': 'cors',
+                    'Sec-Fetch-Site': 'cross-site',
+                    Priority: 'u=1, i',
+                    'x-queryid': queryId,
+                    'x-userid': '0',
+                },
+            });
+
+            let products = [];
+            if (response.data?.data?.products) {
+                products = response.data.data.products;
+            } else if (response.data?.products) {
+                products = response.data.products;
+            } else if (Array.isArray(response.data)) {
+                products = response.data;
+            }
+
+            console.log(`✅ Найдено товаров: ${products.length}`);
+            return products.map((product) => this.normalizeProductData(product, category.id));
+        } catch (error) {
+            console.error(`❌ Ошибка запроса страницы ${page}:`, error.message);
+            return [];
+        }
+    }
+
+    /**
+     * Формирование query параметра для категории
+     */
+    buildCategoryQuery(category) {
+        if (category.search_query) {
+            console.log(`🎯 Используем search_query из базы: ${category.search_query}`);
+            return category.search_query;
+        }
+
+        if (category.query && category.query.includes('menu_redirect_subject_v2')) {
+            console.log(`🎯 Используем query из базы: ${category.query}`);
+            return category.query;
+        }
+
+        console.log(`🎯 Формируем query автоматически: menu_redirect_subject_v2_${category.id} ${category.name}`);
+        return `menu_redirect_subject_v2_${category.id} ${category.name}`;
+    }
+
+    /**
+     * Нормализация данных товара
+     */
+    normalizeProductData(productData, categoryId) {
+        let priceU = 0;
+
+        // Основной способ через sizes[0].price.product
+        if (productData.sizes && productData.sizes.length > 0) {
+            const firstSize = productData.sizes[0];
+            if (firstSize.price?.product && firstSize.price.product > 0) {
+                priceU = firstSize.price.product;
+            } else if (firstSize.price?.basic && firstSize.price.basic > 0) {
+                priceU = firstSize.price.basic;
+            }
+        }
+        // Резервные способы
+        else if (productData.salePriceU && productData.salePriceU > 0) {
+            priceU = productData.salePriceU;
+        } else if (productData.priceU && productData.priceU > 0) {
+            priceU = productData.priceU;
+        }
+
+        const priceInRubles = priceU ? Math.round(priceU / 100) : 0;
+
+        if (priceInRubles === 0) {
+            console.log(`❌ НЕ НАЙДЕНА ЦЕНА для товара: ${productData.name}`);
+        }
+
+        return {
+            nm_id: productData.id,
+            name: productData.name || 'Неизвестный товар',
+            brand: productData.brand || '',
+            brandId: productData.brandId || 0,
+            category_id: categoryId,
+            current_price: priceInRubles,
+            rating: productData.rating || productData.reviewRating || 0,
+            feedbacks_count: productData.feedbacks || productData.feedbackCount || 0,
+            image_url: this.getProductImageUrl(productData.id),
+            supplier: productData.supplier || '',
+            supplier_id: productData.supplierId || 0,
+        };
+    }
+
     /**
      * Генерация URL изображения товара
      */
@@ -467,169 +444,32 @@ export class PriceMonitoringService {
     }
 
     /**
-     * Сохранение товаров в базу данных
-     */
-    async saveProductsToDatabase(products) {
-        let savedCount = 0;
-        let errorCount = 0;
-
-        //  console.log(`💾 Начинаем сохранение ${products.length} товаров...`);
-
-        for (const product of products) {
-            try {
-                // Проверяем обязательные поля
-                if (!product.nm_id) {
-                    console.log(`❌ Пропускаем товар без ID: ${product.name}`);
-                    errorCount++;
-                    continue;
-                }
-
-                if (!product.name) {
-                    console.log(`❌ Пропускаем товар без названия: ID ${product.nm_id}`);
-                    errorCount++;
-                    continue;
-                }
-
-                if (!product.current_price || product.current_price === 0) {
-                    console.log(`⚠️ Товар с нулевой ценой: ${product.name} (${product.nm_id})`);
-                    continue;
-                }
-
-                //  console.log(`📝 Сохраняем товар: ${product.name}, цена: ${product.current_price} руб.`);
-
-                // Сохраняем товар
-                try {
-                    const result = productModel.upsert(product);
-
-                    const lastPriceRecord = priceHistoryModel.getLastPrice(product.nm_id);
-                    const lastPrice = lastPriceRecord ? lastPriceRecord.price : null;
-
-                    if (product.current_price > 0 && product.current_price !== lastPrice) {
-                        priceHistoryModel.create(product.nm_id, product.current_price);
-                        console.log(
-                            `✅ Товар сохранен в products цена изменилась: ${product.nm_id}  ${product.current_price} =>  ${lastPrice} `
-                        );
-                    }
-                    // console.log(`✅ Товар сохранен в products: ${product.nm_id}`);
-                } catch (upsertError) {
-                    console.error(`❌ Ошибка upsert товара ${product.nm_id}:`, upsertError.message);
-                    errorCount++;
-                    continue;
-                }
-
-                // Сохраняем историю цен
-                // if (product.current_price > 0) {
-                //     try {
-                //         priceHistoryModel.create(product.nm_id, product.current_price);
-                //         //   console.log(`✅ История цен сохранена: ${product.nm_id} - ${product.current_price} руб.`);
-                //     } catch (historyError) {
-                //         console.error(`❌ Ошибка сохранения истории цен ${product.nm_id}:`, historyError.message);
-                //     }
-                // }
-
-                savedCount++;
-            } catch (error) {
-                console.error(`❌ Критическая ошибка сохранения товара ${product.nm_id}:`, error);
-                errorCount++;
-            }
-        }
-
-        //  console.log(`💾 Итог сохранения: ${savedCount} успешно, ${errorCount} ошибок из ${products.length} товаров`);
-    }
-
-    /**
-     * Анализ изменений цен
-     */
-    async analyzePriceChanges(products, threshold, userId) {
-        const alerts = [];
-
-        for (const product of products) {
-            try {
-                if (!product.nm_id || product.current_price === 0) {
-                    continue;
-                }
-
-                // Получаем предыдущую цену
-                const lastTwoPrices = priceHistoryModel.getLastTwoPrices(product.nm_id);
-
-                if (!lastTwoPrices || lastTwoPrices.length < 2) {
-                    continue;
-                }
-
-                // Деструктурируем массив
-                const [currentRecord, previousRecord] = lastTwoPrices;
-                const previousPrice = previousRecord.price; // Предыдущая цена timestamp
-
-                const currentPrice = currentRecord.price; // Текущая цена
-
-                const currentTime = currentRecord.timestamp;
-                const previousTime = previousRecord.timestamp;
-
-                // Пропускаем если цены одинаковые
-                if (previousPrice === currentPrice) {
-                    continue;
-                }
-
-                console.log(`🎯 ЦЕНЫ РАЗНЫЕ: ${product.nm_id}  ${previousPrice} → ${currentPrice}`);
-
-                // Рассчитываем изменение цены в процентах
-                const priceChange = this.calculatePriceChange(previousPrice, currentPrice);
-
-                // Проверяем превышение порога threshold
-                if (priceChange <= -threshold) {
-                    alerts.push({
-                        user_id: userId,
-                        product_id: product.nm_id,
-                        product_name: product.name,
-                        brand: product.brand,
-                        image_url: product.image_url,
-                        old_price: previousPrice,
-                        new_price: currentPrice,
-                        old_time: previousTime,
-                        new_time: currentTime,
-                        percent_change: priceChange,
-                        threshold: threshold,
-                    });
-
-                    // обновить цену в базе
-                }
-            } catch (error) {
-                console.error(`❌ Ошибка анализа товара ${product.nm_id}:`, error.message);
-            }
-        }
-
-        return alerts;
-    }
-    /**
      * Расчет изменения цены в процентах
      */
     calculatePriceChange(oldPrice, newPrice) {
         if (!oldPrice || oldPrice === 0) return 0;
-
         const change = ((newPrice - oldPrice) / oldPrice) * 100;
         return Math.round(change * 100) / 100;
     }
 
+    /**
+     * Форматирование сообщения уведомления
+     */
     formatAlertMessage(alert, categoryName) {
         const changeIcon = alert.percent_change > 0 ? '📈' : '📉';
         const changeType = alert.percent_change > 0 ? 'подорожал' : 'подешевел';
         const changeColor = alert.percent_change > 0 ? '🔴' : '🟢';
-
-        // Ссылка на товар на Wildberries
         const productUrl = `https://www.wildberries.ru/catalog/${alert.product_id}/detail.aspx`;
 
         return `
 ${changeColor} <b>Изменение цены</b>
-
 
 <b>${alert.product_id}</b>
 📦 <b>${alert.product_name}</b>
 🏷️ Бренд: ${alert.brand || 'Не указан'}
 📂 Категория: ${categoryName}
 
-💰 <b>Цена:</b> ${alert.old_price} руб. (${dayjs(alert.old_time).format('DD.MM.YYYY HH:mm')}) → ${
-            alert.new_price
-        } руб. (${dayjs(alert.new_time).format('DD.MM.YYYY HH:mm')})
+💰 <b>Цена:</b> ${alert.old_price} руб. → ${alert.new_price} руб.
 ${changeIcon} <b>Изменение:</b> ${Math.abs(alert.percent_change)}% ${changeType}
 
 ⚡ <b>Порог уведомления:</b> ${alert.threshold}%
@@ -638,33 +478,6 @@ ${changeIcon} <b>Изменение:</b> ${Math.abs(alert.percent_change)}% ${ch
 
 🕒 ${dayjs().tz('Europe/Moscow').format('DD.MM.YYYY HH:mm')}
     `.trim();
-    }
-
-    /**
-     * Отправка уведомлений о изменении цен
-     */
-    async sendPriceAlerts(alerts, subscription, bot) {
-        for (const alert of alerts) {
-            try {
-                // Сохраняем уведомление в базу
-                this.saveAlertToDatabase(alert);
-
-                // Формируем сообщение для пользователя
-                const message = this.formatAlertMessage(alert, subscription.category_name);
-
-                console.log(
-                    `📨 Уведомление для ${subscription.user_id}: ${alert.product_name} - ${alert.percent_change}%`
-                );
-
-                // Отправляем сообщение через бота
-                await bot.api.sendMessage(subscription.user_id, message, {
-                    parse_mode: 'HTML',
-                    disable_web_page_preview: true, // Отключаем превью чтобы ссылка была кликабельной
-                });
-            } catch (error) {
-                console.error(`❌ Ошибка отправки уведомления:`, error.message);
-            }
-        }
     }
 
     /**
@@ -691,10 +504,6 @@ ${changeIcon} <b>Изменение:</b> ${Math.abs(alert.percent_change)}% ${ch
             console.error('❌ Ошибка сохранения уведомления:', error.message);
         }
     }
-
-    /**
-     * Форматирование сообщения уведомления
-     */
 
     /**
      * Задержка выполнения
