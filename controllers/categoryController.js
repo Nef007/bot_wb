@@ -155,6 +155,12 @@ ${subscription.last_scan_at ? dayjs(subscription.last_scan_at).format('DD.MM.YYY
                     .text(currentThreshold === 10 ? '✅ 10%' : '10%', `set_threshold_${categoryId}_10`)
                     .text(currentThreshold === 20 ? '✅ 20%' : '20%', `set_threshold_${categoryId}_20`)
                     .text(currentThreshold === 30 ? '✅ 30%' : '30%', `set_threshold_${categoryId}_30`)
+                    .text(currentThreshold === 40 ? '✅ 40%' : '40%', `set_threshold_${categoryId}_40`)
+                    .row()
+                    .text(currentThreshold === 50 ? '✅ 50%' : '50%', `set_threshold_${categoryId}_50`)
+                    .text(currentThreshold === 60 ? '✅ 60%' : '60%', `set_threshold_${categoryId}_60`)
+                    .text(currentThreshold === 70 ? '✅ 70%' : '70%', `set_threshold_${categoryId}_70`)
+                    .text(currentThreshold === 80 ? '✅ 80%' : '80%', `set_threshold_${categoryId}_80`)
                     .row()
                     .text('❌ Отписаться', `unsubscribe_${categoryId}`)
                     .row();
@@ -210,7 +216,7 @@ ${subscription.last_scan_at ? dayjs(subscription.last_scan_at).format('DD.MM.YYY
 
             // Создаем подписку с настройками по умолчанию
             const subscriptionId = await userCategorySubscriptionModel.create(userId, categoryId, {
-                alertThreshold: 5,
+                alertThreshold: 10,
                 scanPages: 10,
                 scanInterval: 10,
                 maxProducts: 1000,
@@ -263,6 +269,12 @@ ${subscription.last_scan_at ? dayjs(subscription.last_scan_at).format('DD.MM.YYY
                 .text(currentThreshold === 10 ? '✅ 10%' : '10%', `set_threshold_${categoryId}_10`)
                 .text(currentThreshold === 20 ? '✅ 20%' : '20%', `set_threshold_${categoryId}_20`)
                 .text(currentThreshold === 30 ? '✅ 30%' : '30%', `set_threshold_${categoryId}_30`)
+                .text(currentThreshold === 40 ? '✅ 40%' : '40%', `set_threshold_${categoryId}_40`)
+                .row()
+                .text(currentThreshold === 50 ? '✅ 50%' : '50%', `set_threshold_${categoryId}_50`)
+                .text(currentThreshold === 60 ? '✅ 60%' : '60%', `set_threshold_${categoryId}_60`)
+                .text(currentThreshold === 70 ? '✅ 70%' : '70%', `set_threshold_${categoryId}_70`)
+                .text(currentThreshold === 80 ? '✅ 80%' : '80%', `set_threshold_${categoryId}_80`)
                 .row()
                 .text('❌ Отписаться', `unsubscribe_${categoryId}`)
                 .row();

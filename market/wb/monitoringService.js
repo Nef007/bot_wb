@@ -1,22 +1,25 @@
 // services/priceMonitoringService.js
 import axios from 'axios';
-import { getDB } from '../db/connection.js';
-import { userCategorySubscriptionModel } from '../db/models/userCategorySubscriptionModel.js';
-import { wbCategoryModel } from '../db/models/wbCategory.js';
-import { productModel } from '../db/models/productModel.js';
-import { priceHistoryModel } from '../db/models/priceHistoryModel.js';
+import { getDB } from '../../db/connection.js';
+import { userCategorySubscriptionModel } from '../../db/models/userCategorySubscriptionModel.js';
+import { wbCategoryModel } from '../../db/models/wbCategory.js';
+import { productModel } from '../../db/models/productModel.js';
+import { priceHistoryModel } from '../../db/models/priceHistoryModel.js';
 import dayjs from 'dayjs';
 import { wrapper } from 'axios-cookiejar-support';
 import { CookieJar } from 'tough-cookie';
-import { telegramNotificationService } from './telegramNotificationService.js';
+import { telegramNotificationService } from '../../services/telegramNotificationService.js';
+import utc from 'dayjs/plugin/utc.js';
+import timezone from 'dayjs/plugin/timezone.js';
 
-const jar = new CookieJar();
-const client = wrapper(axios.create({ jar }));
+dayjs.extend(utc);
+dayjs.extend(timezone);
+dayjs.tz.setDefault('Europe/Moscow');
 
 export class PriceMonitoringService {
     constructor() {
         this.scanDelay = 3000;
-        this.maxPages = 5;
+        this.maxPages = 2;
         this.currentlyScanning = new Set();
         this.initAxiosWithCookies();
     }
@@ -193,6 +196,7 @@ export class PriceMonitoringService {
 
                 // Если это не первый раз когда видим товар (была предыдущая цена)
                 if (lastPrice !== null) {
+                    console.log('🚀 ~ file: priceMonitoringService.js:202 ~ lastPrice:', lastPrice);
                     // Проверяем для каждого пользователя нужно ли отправлять уведомление
                     await this.checkAndSendNotifications(product, lastPrice, subscriptions, category, bot);
                 }
@@ -207,18 +211,22 @@ export class PriceMonitoringService {
      */
     async checkAndSendNotifications(product, oldPrice, subscriptions, category, bot) {
         const priceChange = this.calculatePriceChange(oldPrice, product.current_price);
+        console.log('🚀 ~ file: priceMonitoringService.js:217 ~ priceChange:', priceChange);
 
         // Получаем временные метки для старой и новой цены
         const lastTwoPrices = priceHistoryModel.getLastTwoPrices(product.nm_id);
         const [currentRecord, previousRecord] = lastTwoPrices || [];
 
         const oldTime = previousRecord ? previousRecord.timestamp : new Date();
+        console.log('🚀 ~ file: priceMonitoringService.js:216 ~ oldTime:', oldTime);
         const newTime = currentRecord ? currentRecord.timestamp : new Date();
+        console.log('🚀 ~ file: priceMonitoringService.js:218 ~ newTime:', newTime);
 
         // Фильтруем подписки где изменение цены превышает порог
         const subscriptionsToNotify = subscriptions.filter(
-            (subscription) => priceChange <= -subscription.alert_threshold
+            (subscription) => priceChange <= subscription.alert_threshold
         );
+        console.log('🚀 ~ file: priceMonitoringService.js:222 ~ subscriptionsToNotify:', subscriptionsToNotify);
 
         if (subscriptionsToNotify.length === 0) {
             return;
@@ -233,7 +241,7 @@ export class PriceMonitoringService {
                 product_id: product.nm_id,
                 product_name: product.name,
                 brand: product.brand,
-                image_url: product.image_url,
+                image_url: product.image_url, // Добавляем URL изображения
                 old_price: oldPrice,
                 new_price: product.current_price,
                 old_time: oldTime,
@@ -251,6 +259,7 @@ export class PriceMonitoringService {
                 bot: bot,
                 chatId: subscription.user_id,
                 text: message,
+                image_url: product.image_url, // Передаем URL изображения
                 alertData: alert,
             };
         });
@@ -428,8 +437,8 @@ export class PriceMonitoringService {
 
         try {
             const nm = parseInt(productId, 10);
-            const vol = Math.floor(nm / 1e5);
-            const part = Math.floor(nm / 1e3);
+            const vol = ~~(nm / 1e5);
+            const part = ~~(nm / 1e3);
 
             let host = '01';
             if (vol >= 0 && vol <= 143) host = '01';
@@ -444,10 +453,17 @@ export class PriceMonitoringService {
             else if (vol >= 1314 && vol <= 1601) host = '10';
             else if (vol >= 1602 && vol <= 1655) host = '11';
             else if (vol >= 1656 && vol <= 1919) host = '12';
-            else host = '01';
+            else if (vol >= 1920 && vol <= 2045) host = '13';
+            else if (vol >= 2046 && vol <= 2189) host = '14';
+            else if (vol >= 2170 && vol <= 2405) host = '15';
+            else if (vol >= 2406 && vol <= 2621) host = '16';
+            else if (vol >= 2622 && vol <= 2837) host = '17';
+            else host = '18';
 
+            // Возвращаем URL большого изображения (big/1.jpg)
             return `https://basket-${host}.wbbasket.ru/vol${vol}/part${part}/${nm}/images/big/1.jpg`;
         } catch (error) {
+            console.log('🚀 ~ file: priceMonitoringService.js:465 ~ error:', error);
             return '';
         }
     }
@@ -470,24 +486,33 @@ export class PriceMonitoringService {
         const changeColor = alert.percent_change > 0 ? '🔴' : '🟢';
         const productUrl = `https://www.wildberries.ru/catalog/${alert.product_id}/detail.aspx`;
 
+        // Функция для правильного парсинга времени из SQLite
+        const parseDbTime = (timeString) => {
+            // SQLite хранит время в UTC формате: "2025-10-12 19:24:00"
+            // Сначала парсим как UTC, потом конвертируем в Москву
+            return dayjs.utc(timeString, 'YYYY-MM-DD HH:mm:ss').tz('Europe/Moscow');
+        };
+
+        const oldTimeFormatted = parseDbTime(alert.old_time).format('DD.MM.YYYY HH:mm');
+        const newTimeFormatted = parseDbTime(alert.new_time).format('DD.MM.YYYY HH:mm');
+        const currentTimeFormatted = dayjs().tz('Europe/Moscow').format('DD.MM.YYYY HH:mm');
+
         return `
 ${changeColor} <b>Изменение цены</b>
 
-<b>${alert.product_id}</b>
+
 📦 <b>${alert.product_name}</b>
 🏷️ Бренд: ${alert.brand || 'Не указан'}
 📂 Категория: ${categoryName}
 
-💰 <b>Цена:</b> ${alert.old_price} руб. (${dayjs(alert.old_time).format('DD.MM.YYYY HH:mm')}) → ${
-            alert.new_price
-        } руб. (${dayjs(alert.new_time).format('DD.MM.YYYY HH:mm')})
+💰 <b>Цена:</b> ${alert.old_price} руб. (${oldTimeFormatted}) → ${alert.new_price} руб. (${newTimeFormatted})
 ${changeIcon} <b>Изменение:</b> ${Math.abs(alert.percent_change)}% ${changeType}
 
 ⚡ <b>Порог уведомления:</b> ${alert.threshold}%
 
 🔗 Ссылка на товар: ${productUrl}
 
-🕒 ${dayjs().tz('Europe/Moscow').format('DD.MM.YYYY HH:mm')}
+🕒 ${currentTimeFormatted}
     `.trim();
     }
 

@@ -18,7 +18,6 @@ export class TelegramNotificationService {
             addedAt: Date.now(),
         });
 
-        // Запускаем обработку если еще не запущена
         if (!this.isProcessing) {
             this.processQueue();
         }
@@ -52,10 +51,15 @@ export class TelegramNotificationService {
         this.isProcessing = true;
 
         while (this.messageQueue.length > 0) {
-            const message = this.messageQueue[0]; // Берем первое сообщение без удаления
+            const message = this.messageQueue[0];
 
             try {
-                await this.sendMessage(message);
+                // Отправляем сообщение с фото или без
+                if (message.image_url) {
+                    await this.sendPhotoMessage(message);
+                } else {
+                    await this.sendTextMessage(message);
+                }
 
                 // Успешно отправлено - удаляем из очереди
                 this.messageQueue.shift();
@@ -67,17 +71,13 @@ export class TelegramNotificationService {
             } catch (error) {
                 console.error(`❌ Ошибка отправки сообщения:`, error.message);
 
-                // Увеличиваем счетчик попыток
                 message.retryCount++;
 
                 if (message.retryCount >= this.maxRetries) {
                     console.error(`❌ Превышено количество попыток для сообщения:`, message);
-                    this.messageQueue.shift(); // Удаляем сообщение после исчерпания попыток
+                    this.messageQueue.shift();
                 } else {
-                    // Перемещаем сообщение в конец очереди для повторной попытки
                     this.messageQueue.push(this.messageQueue.shift());
-
-                    // Увеличиваем задержку перед повторной попыткой
                     await this.delay(this.sendInterval * 2);
                 }
             }
@@ -87,9 +87,50 @@ export class TelegramNotificationService {
     }
 
     /**
-     * Отправка сообщения через Telegram Bot API
+     * Отправка сообщения с фото
      */
-    async sendMessage(messageData) {
+    async sendPhotoMessage(messageData) {
+        const { bot, chatId, text, image_url, options = {} } = messageData;
+
+        if (!bot || !chatId || !text || !image_url) {
+            throw new Error('Отсутствуют обязательные параметры: bot, chatId, text или image_url');
+        }
+
+        try {
+            await bot.api.sendPhoto(chatId, image_url, {
+                caption: text,
+                parse_mode: 'HTML',
+                ...options,
+            });
+
+            console.log(`✅ Сообщение с фото отправлено пользователю ${chatId}`);
+        } catch (error) {
+            // Если не удалось отправить с фото, пробуем отправить текстовое сообщение
+            if (error.description && error.description.includes('failed to get HTTP URL content')) {
+                console.log('⚠️ Не удалось загрузить фото, отправляем текстовое сообщение');
+                await this.sendTextMessage(messageData);
+                return;
+            }
+
+            if (error.description && error.description.includes('Too Many Requests')) {
+                console.log('⚠️ Превышен лимит запросов, увеличиваем задержку');
+                await this.delay(1000);
+                throw error;
+            }
+
+            if (error.description && error.description.includes('bot was blocked')) {
+                console.log(`❌ Бот заблокирован пользователем ${chatId}`);
+                throw new Error('BOT_BLOCKED');
+            }
+
+            throw error;
+        }
+    }
+
+    /**
+     * Отправка текстового сообщения
+     */
+    async sendTextMessage(messageData) {
         const { bot, chatId, text, options = {} } = messageData;
 
         if (!bot || !chatId || !text) {
@@ -103,18 +144,17 @@ export class TelegramNotificationService {
                 ...options,
             });
 
-            console.log(`✅ Сообщение отправлено пользователю ${chatId}`);
+            console.log(`✅ Текстовое сообщение отправлено пользователю ${chatId}`);
         } catch (error) {
-            // Обрабатываем специфичные ошибки Telegram API
             if (error.description && error.description.includes('Too Many Requests')) {
                 console.log('⚠️ Превышен лимит запросов, увеличиваем задержку');
-                await this.delay(1000); // Увеличиваем задержку при лимите
-                throw error; // Пробрасываем для повторной попытки
+                await this.delay(1000);
+                throw error;
             }
 
             if (error.description && error.description.includes('bot was blocked')) {
                 console.log(`❌ Бот заблокирован пользователем ${chatId}`);
-                throw new Error('BOT_BLOCKED'); // Специальная ошибка для блокировки
+                throw new Error('BOT_BLOCKED');
             }
 
             throw error;

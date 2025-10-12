@@ -20,6 +20,7 @@ export function getDB() {
 
 export function initializeDatabase() {
     const db = getDB();
+
     // Создаем базовые таблицы если их нет
     createBaseTables(db);
     return db;

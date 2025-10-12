@@ -14,9 +14,9 @@ import { startPeriodicMonitoring } from './services/priceMonitoringService.js';
 
 const yooMoneyService = new YooMoneyService();
 
-dayjs.extend(utc);
-dayjs.extend(timezone);
-dayjs.tz.setDefault('Europe/Moscow');
+// dayjs.extend(utc);
+// dayjs.extend(timezone);
+// dayjs.tz.setDefault('Europe/Moscow');
 
 // Настройка хранилища сессий (если используется FileAdapter)
 const storage = new FileAdapter({

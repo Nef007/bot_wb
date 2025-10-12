@@ -8,27 +8,19 @@ export const productModel = {
     upsert(productData) {
         const db = getDB();
 
-        // Явный UPDATE
-        const updateResult = db
-            .prepare(
-                `
-        UPDATE products 
-        SET current_price = ?, last_updated_at = CURRENT_TIMESTAMP
-        WHERE nm_id = ?
-    `
-            )
-            .run(productData.current_price, productData.nm_id);
+        // Сначала проверяем существует ли товар
+        const existingProduct = db.prepare('SELECT nm_id FROM products WHERE nm_id = ?').get(productData.nm_id);
 
-        // Если не обновилось - INSERT
-        if (updateResult.changes === 0) {
+        // Если товара нет - создаем новый
+        if (!existingProduct) {
             return db
                 .prepare(
                     `
-            INSERT INTO products 
-            (nm_id, name, brand, brand_id, category_id, current_price, rating, 
-             feedbacks_count, image_url, supplier, supplier_id)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `
+                INSERT INTO products 
+                (nm_id, name, brand, brand_id, category_id, current_price, rating, 
+                 feedbacks_count, image_url, supplier, supplier_id)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `
                 )
                 .run(
                     productData.nm_id,
@@ -45,7 +37,8 @@ export const productModel = {
                 );
         }
 
-        return updateResult;
+        // Если товар уже существует - не делаем ничего
+        return { changes: 0 };
     },
 
     upsertExplicit(productData) {
