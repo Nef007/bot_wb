@@ -269,7 +269,7 @@ export class WBPriceMonitoringService extends BaseMonitoringService {
         }
 
         const subscriptionsToNotify = subscriptions.filter(
-            (subscription) => priceChange <= subscription.alert_threshold
+            (subscription) => priceChange <= -subscription.alert_threshold
         );
 
         if (subscriptionsToNotify.length === 0) {
