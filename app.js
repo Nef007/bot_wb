@@ -1,16 +1,16 @@
 import { Bot, session } from 'grammy';
 import { conversations, createConversation } from '@grammyjs/conversations';
 import { FileAdapter } from '@grammyjs/storage-file'; // Проверить использование
-import dayjs from 'dayjs';
-import utc from 'dayjs/plugin/utc.js';
-import timezone from 'dayjs/plugin/timezone.js';
+
 import 'dotenv/config';
 import { userController } from './controllers/userController.js';
 import mainRouter from './composer/index.js';
 import { YooMoneyService } from './services/yoomoneyService.js';
 import userModel from './db/models/user.js';
 import { wbCategoryModel } from './db/models/wbCategory.js'; // Добавляем импорт модели категорий
-import { startPeriodicMonitoring } from './services/priceMonitoringService.js';
+import { TelegramNotificationService } from './services/telegramNotificationService.js';
+import { notificationManager } from './services/notificationManager.js';
+import { monitoringOrchestrator } from './services/monitoringOrchestrator.js';
 
 const yooMoneyService = new YooMoneyService();
 
@@ -65,30 +65,48 @@ async function start() {
     // Обработчики для graceful shutdown
     process.on('SIGINT', async () => {
         console.log('🛑 Received SIGINT, shutting down gracefully...');
-
+        monitoringOrchestrator.startAllMonitoring();
         process.exit(0);
     });
 
     process.on('SIGTERM', async () => {
         console.log('🛑 Received SIGTERM, shutting down gracefully...');
-
+        monitoringOrchestrator.startAllMonitoring();
         process.exit(0);
     });
 
-    // Start bot
     bot.start({
         onStart: async ({ username }) => {
-            startPeriodicMonitoring(bot);
-            await initializeAdmin();
-            await syncCategories(); // Добавляем синхронизацию категорий
-            await yooMoneyService.initialize();
             console.log(`[GrammyBot] STARTING: https://t.me/${username}`);
+
+            try {
+                await initializeAdmin();
+
+                // 1. Создаем сервис уведомлений
+                const notificationService = new TelegramNotificationService(bot);
+                console.log('✅ TelegramNotificationService создан');
+
+                // 2. Инициализируем менеджер уведомлений
+                notificationManager.initialize(notificationService);
+                console.log('✅ NotificationManager инициализирован');
+
+                // 3. Синхронизируем категории
+                await syncCategories();
+
+                // 4. Инициализируем платежи
+                await yooMoneyService.initialize();
+
+                // 5. Запускаем мониторинг
+                monitoringOrchestrator.startPeriodicMonitoring();
+                console.log('✅ Мониторинг запущен');
+            } catch (error) {
+                console.error('❌ Ошибка при инициализации:', error);
+            }
         },
     });
 
     console.log('[GrammyBot] STARTING');
 }
-
 start();
 
 async function initializeAdmin() {

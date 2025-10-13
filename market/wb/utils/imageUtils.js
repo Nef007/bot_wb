@@ -1,4 +1,4 @@
-import { PriceMonitoringConfig } from './priceUtils.js';
+import { PriceMonitoringConfig } from '../config.js';
 
 export class ImageUtils {
     /**

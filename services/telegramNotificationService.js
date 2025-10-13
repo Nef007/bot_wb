@@ -1,11 +1,11 @@
 // services/telegramNotificationService.js
-
 export class TelegramNotificationService {
-    constructor() {
+    constructor(bot) {
         this.messageQueue = [];
         this.isProcessing = false;
         this.sendInterval = 300; // ms
         this.maxRetries = 3;
+        this.bot = bot;
     }
 
     /**
@@ -90,14 +90,14 @@ export class TelegramNotificationService {
      * Отправка сообщения с фото
      */
     async sendPhotoMessage(messageData) {
-        const { bot, chatId, text, image_url, options = {} } = messageData;
+        const { chatId, text, image_url, options = {} } = messageData;
 
-        if (!bot || !chatId || !text || !image_url) {
-            throw new Error('Отсутствуют обязательные параметры: bot, chatId, text или image_url');
+        if (!chatId || !text || !image_url) {
+            throw new Error('Отсутствуют обязательные параметры: chatId, text или image_url');
         }
 
         try {
-            await bot.api.sendPhoto(chatId, image_url, {
+            await this.bot.api.sendPhoto(chatId, image_url, {
                 caption: text,
                 parse_mode: 'HTML',
                 ...options,
@@ -106,8 +106,31 @@ export class TelegramNotificationService {
             console.log(`✅ Сообщение с фото отправлено пользователю ${chatId}`);
         } catch (error) {
             // Если не удалось отправить с фото, пробуем отправить текстовое сообщение
-            if (error.description && error.description.includes('failed to get HTTP URL content')) {
-                console.log('⚠️ Не удалось загрузить фото, отправляем текстовое сообщение');
+            if (
+                error.description &&
+                (error.description.includes('failed to get HTTP URL content') ||
+                    error.description.includes('wrong file identifier') ||
+                    error.description.includes('unsupported URL protocol'))
+            ) {
+                console.log('⚠️ Не удалось загрузить фото, пробуем конвертировать ссылку');
+
+                // Пробуем конвертировать .webp в .jpg
+                const convertedUrl = this.convertToWbFormat(image_url);
+
+                if (convertedUrl !== image_url) {
+                    try {
+                        await this.bot.api.sendPhoto(chatId, convertedUrl, {
+                            caption: text,
+                            parse_mode: 'HTML',
+                            ...options,
+                        });
+                        console.log(`✅ Сообщение с конвертированным фото отправлено пользователю ${chatId}`);
+                        return;
+                    } catch (secondError) {
+                        console.log('⚠️ Не удалось отправить с конвертированным фото, отправляем текстовое сообщение');
+                    }
+                }
+
                 await this.sendTextMessage(messageData);
                 return;
             }
@@ -127,18 +150,32 @@ export class TelegramNotificationService {
         }
     }
 
+    convertToWbFormat(url) {
+        if (!url) return url;
+
+        // Заменяем images/big/ на images/hq/ и .jpg на .webp
+        const convertedUrl = url.replace(/images\/big\//i, 'images/hq/').replace(/\.jpg($|\?)/i, '.webp$1');
+
+        // Если URL изменился, логируем это
+        if (convertedUrl !== url) {
+            console.log(`🔄 Конвертирован URL: ${url} -> ${convertedUrl}`);
+        }
+
+        return convertedUrl;
+    }
+
     /**
      * Отправка текстового сообщения
      */
     async sendTextMessage(messageData) {
-        const { bot, chatId, text, options = {} } = messageData;
+        const { chatId, text, options = {} } = messageData;
 
-        if (!bot || !chatId || !text) {
-            throw new Error('Отсутствуют обязательные параметры: bot, chatId или text');
+        if (!chatId || !text) {
+            throw new Error('Отсутствуют обязательные параметры: chatId или text');
         }
 
         try {
-            await bot.api.sendMessage(chatId, text, {
+            await this.bot.api.sendMessage(chatId, text, {
                 parse_mode: 'HTML',
                 disable_web_page_preview: true,
                 ...options,
@@ -185,7 +222,7 @@ export class TelegramNotificationService {
      */
     getStats() {
         const now = Date.now();
-        const recentMessages = this.messageQueue.filter((msg) => now - msg.addedAt < 60000); // Сообщения добавленные за последнюю минуту
+        const recentMessages = this.messageQueue.filter((msg) => now - msg.addedAt < 60000);
 
         return {
             totalInQueue: this.messageQueue.length,
@@ -196,20 +233,9 @@ export class TelegramNotificationService {
     }
 
     /**
-     * Изменение интервала отправки
-     */
-    setSendInterval(intervalMs) {
-        this.sendInterval = intervalMs;
-        console.log(`⏱️ Интервал отправки изменен на ${intervalMs}мс`);
-    }
-
-    /**
      * Задержка выполнения
      */
     delay(ms) {
         return new Promise((resolve) => setTimeout(resolve, ms));
     }
 }
-
-// Создаем и экспортируем экземпляр сервиса
-export const telegramNotificationService = new TelegramNotificationService();

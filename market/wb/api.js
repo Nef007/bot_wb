@@ -2,7 +2,7 @@
 import axios from 'axios';
 import { wrapper } from 'axios-cookiejar-support';
 import { CookieJar } from 'tough-cookie';
-import { PriceMonitoringConfig } from '../config/priceMonitoringConfig.js';
+import { PriceMonitoringConfig } from './config.js';
 
 export class WildberriesApiService {
     constructor() {
@@ -54,7 +54,7 @@ export class WildberriesApiService {
 
         initialCookies.forEach((cookie) => {
             try {
-                this.jar.setCookieSync(cookie, baseUrl);
+                this.axiosInstance.defaults.jar.setCookieSync(cookie, baseUrl);
             } catch (error) {
                 console.warn('Не удалось установить cookie:', cookie.substring(0, 50));
             }
@@ -68,23 +68,43 @@ export class WildberriesApiService {
         try {
             const query = this.buildCategoryQuery(category);
             const queryId = this.generateQueryId();
+            const url = 'https://u-search.wb.ru/exactmatch/ru/common/v18/search';
 
             const params = {
-                ...PriceMonitoringConfig.API.DEFAULT_PARAMS,
-                page,
-                query,
                 ab_testid: 'popular_sort',
                 ab_testing: 'false',
+                appType: 1,
+                curr: 'rub',
+                dest: -1257786,
                 inheritFilters: 'false',
+                lang: 'ru',
+                page: page,
+                query: query,
                 resultset: 'catalog',
+                sort: 'popular',
+                spp: 30,
                 suppressSpellcheck: 'false',
             };
 
-            const response = await this.axiosInstance.get(PriceMonitoringConfig.API.BASE_URL, {
+            const fullUrl = this.constructFullUrl(url, params);
+            console.log('📡 Запрос к Wildberries:', fullUrl);
+
+            const response = await this.axiosInstance.get(url, {
                 params,
+                timeout: 20000,
+                withCredentials: true,
                 headers: {
-                    ...this.axiosInstance.defaults.headers,
-                    Referer: `https://www.wildberries.ru/catalog/${category.id}?sort=popular&page=${page}`,
+                    'User-Agent':
+                        'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 YaBrowser/25.8.0.0 Safari/537.36',
+                    Accept: '*/*',
+                    'Accept-Language': 'ru,en;q=0.9',
+                    'Accept-Encoding': 'gzip, deflate, br',
+                    Referer: `https://www.wildberries.ru/catalog/elektronika/smart-chasy?sort=popular&page=${page}`,
+                    Origin: 'https://www.wildberries.ru',
+                    'Sec-Fetch-Dest': 'empty',
+                    'Sec-Fetch-Mode': 'cors',
+                    'Sec-Fetch-Site': 'cross-site',
+                    Priority: 'u=1, i',
                     'x-queryid': queryId,
                     'x-userid': '0',
                 },
@@ -110,6 +130,13 @@ export class WildberriesApiService {
     generateQueryId() {
         const timestamp = Math.floor(Date.now() / 1000);
         return `qid${timestamp}${Math.random().toString().substring(2, 12)}`;
+    }
+
+    constructFullUrl(baseUrl, params) {
+        const queryString = Object.keys(params)
+            .map((key) => `${encodeURIComponent(key)}=${encodeURIComponent(params[key])}`)
+            .join('&');
+        return `${baseUrl}?${queryString}`;
     }
 
     extractProductsFromResponse(data) {
