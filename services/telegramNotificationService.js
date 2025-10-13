@@ -154,7 +154,7 @@ export class TelegramNotificationService {
         if (!url) return url;
 
         // Заменяем images/big/ на images/hq/ и .jpg на .webp
-        const convertedUrl = url.replace(/images\/big\//i, 'images/hq/').replace(/\.jpg($|\?)/i, '.webp$1');
+        const convertedUrl = url.replace(/images\/big\//i, 'images/big/').replace(/\.jpg($|\?)/i, '.webp$1');
 
         // Если URL изменился, логируем это
         if (convertedUrl !== url) {
