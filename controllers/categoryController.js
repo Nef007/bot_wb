@@ -2,6 +2,8 @@ import { InlineKeyboard } from 'grammy';
 import { wbCategoryModel } from '../db/models/wbCategory.js';
 import { userCategorySubscriptionModel } from '../db/models/userCategorySubscriptionModel.js';
 import dayjs from 'dayjs';
+import { userProductSubscriptionModel } from '../db/models/userProductSubscriptionModel.js';
+import { productController } from './productController.js';
 
 export const categoryController = {
     showCategories: async (ctx, parentId = null, messageIdToEdit = null) => {
@@ -356,24 +358,30 @@ ${subscription.last_scan_at ? dayjs(subscription.last_scan_at).format('DD.MM.YYY
     },
 
     /**
-     * Показать мои подписки
+     * Показать мои подписки (категории + товары)
      */
     showMySubscriptions: async (ctx, messageIdToEdit = null) => {
         try {
             const userId = String(ctx.from.id);
-            const subscriptions = await userCategorySubscriptionModel.findByUserId(userId);
+            const categorySubscriptions = await userCategorySubscriptionModel.findByUserId(userId);
+            const productSubscriptions = await userProductSubscriptionModel.findByUserId(userId);
 
-            if (subscriptions.length === 0) {
+            const totalSubscriptions = categorySubscriptions.length + productSubscriptions.length;
+
+            if (totalSubscriptions === 0) {
                 const menuHtml = `
 📋 <b>Мои подписки</b>
 
 У вас пока нет активных подписок.
 
-Перейдите в раздел "📂 Категории" чтобы выбрать категории для отслеживания цен.
+Вы можете:
+• Подписаться на категории в разделе "📂 Категории"
+• Добавить конкретный товар через "➕ Добавить товар"
             `;
 
                 const keyboard = new InlineKeyboard()
                     .text('📂 Категории', 'categories_menu')
+                    .text('➕ Добавить товар', 'add_product')
                     .text('⬅️ Назад', 'main_menu')
                     .row();
 
@@ -397,58 +405,63 @@ ${subscription.last_scan_at ? dayjs(subscription.last_scan_at).format('DD.MM.YYY
                 return;
             }
 
-            // Если подписок больше 5, показываем первую страницу с пагинацией
-            if (subscriptions.length > 5) {
-                await categoryController.showMySubscriptionsPage(ctx, 1, messageIdToEdit);
-            } else {
-                // Иначе показываем все подписки на одной странице
-                const menuHtml = `
+            const menuHtml = `
 📋 <b>Мои подписки</b>
 
-Всего активных подписок: <b>${subscriptions.length}</b>
+Всего активных подписок: <b>${totalSubscriptions}</b>
+• 📂 Категорий: ${categorySubscriptions.length}
+• 📦 Товаров: ${productSubscriptions.length}
 
-<b>Список категорий:</b>
-${subscriptions
-    .map(
-        (sub, index) =>
-            `${index + 1}. ${sub.full_name}\n   ⚙️ Порог: ${sub.alert_threshold}% | 📄 Страниц: ${sub.scan_pages}\n`
-    )
-    .join('\n')}
-            `;
+<b>Выберите подписку для управления:</b>
+        `;
 
-                const keyboard = new InlineKeyboard();
+            const keyboard = new InlineKeyboard();
 
-                // Добавляем кнопки для каждой подписки
-                subscriptions.forEach((subscription) => {
-                    keyboard
-                        .text(
-                            `📦 ${subscription.category_name}`,
-                            `subscription_detail_from_my_${subscription.category_id}`
-                        )
-                        .row();
+            // Добавляем категории
+            categorySubscriptions.forEach((subscription) => {
+                const shortName =
+                    subscription.category_name.length > 35
+                        ? subscription.category_name.substring(0, 35) + '...'
+                        : subscription.category_name;
+
+                keyboard.text(`📂 ${shortName}`, `subscription_detail_from_my_${subscription.category_id}`).row();
+            });
+
+            // Добавляем товары
+            productSubscriptions.forEach((subscription) => {
+                const shortName =
+                    subscription.product_name.length > 35
+                        ? subscription.product_name.substring(0, 35) + '...'
+                        : subscription.product_name;
+
+                keyboard.text(`📦 ${shortName}`, `product_detail_from_my_${subscription.product_nm_id}`).row();
+            });
+
+            // Кнопки действий
+            keyboard
+                .text('📂 Добавить категории', 'categories_menu')
+                .text('➕ Добавить товар', 'add_product')
+                .row()
+                .text('⬅️ Назад', 'main_menu')
+                .row();
+
+            let finalMessage;
+            if (messageIdToEdit) {
+                finalMessage = await ctx.editMessageText(menuHtml, {
+                    reply_markup: keyboard,
+                    parse_mode: 'HTML',
                 });
-
-                keyboard.text('📂 Добавить категории', 'categories_menu').text('⬅️ Назад', 'main_menu').row();
-
-                let finalMessage;
-                if (messageIdToEdit) {
-                    finalMessage = await ctx.editMessageText(menuHtml, {
-                        reply_markup: keyboard,
-                        parse_mode: 'HTML',
-                    });
-                } else {
-                    finalMessage = await ctx.reply(menuHtml, {
-                        reply_markup: keyboard,
-                        parse_mode: 'HTML',
-                    });
-                }
-
-                ctx.session.currentMenu = {
-                    type: 'my_subscriptions',
-                    messageId: finalMessage.message_id,
-                    page: 1,
-                };
+            } else {
+                finalMessage = await ctx.reply(menuHtml, {
+                    reply_markup: keyboard,
+                    parse_mode: 'HTML',
+                });
             }
+
+            ctx.session.currentMenu = {
+                type: 'my_subscriptions',
+                messageId: finalMessage.message_id,
+            };
         } catch (e) {
             console.error('ОШИБКА ПОКАЗА МОИХ ПОДПИСОК', e);
             await ctx.reply(`❌ Ошибка при загрузке подписок: ${e.message || e}`);

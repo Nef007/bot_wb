@@ -8,6 +8,9 @@ export const productModel = {
     upsert(productData) {
         const db = getDB();
 
+        // Если category_id не указан или равен 0, используем системную категорию
+        const categoryId = productData.category_id === 0 ? null : productData.category_id;
+
         // Сначала проверяем существует ли товар
         const existingProduct = db.prepare('SELECT nm_id FROM products WHERE nm_id = ?').get(productData.nm_id);
 
@@ -27,7 +30,7 @@ export const productModel = {
                     productData.name,
                     productData.brand,
                     productData.brandId,
-                    productData.category_id,
+                    categoryId, // Используем обработанный category_id
                     productData.current_price,
                     productData.rating || 0,
                     productData.feedbacks_count || 0,
@@ -37,8 +40,29 @@ export const productModel = {
                 );
         }
 
-        // Если товар уже существует - не делаем ничего
-        return { changes: 0 };
+        // Если товар уже существует - обновляем цену и другие данные
+        const updateStmt = db.prepare(`
+            UPDATE products 
+            SET name = ?, brand = ?, brand_id = ?, category_id = ?, 
+                current_price = ?, rating = ?, feedbacks_count = ?, 
+                image_url = ?, supplier = ?, supplier_id = ?, 
+                last_updated_at = CURRENT_TIMESTAMP
+            WHERE nm_id = ?
+        `);
+
+        return updateStmt.run(
+            productData.name,
+            productData.brand,
+            productData.brandId,
+            categoryId,
+            productData.current_price,
+            productData.rating || 0,
+            productData.feedbacks_count || 0,
+            productData.image_url,
+            productData.supplier,
+            productData.supplier_id,
+            productData.nm_id
+        );
     },
 
     upsertExplicit(productData) {

@@ -190,4 +190,25 @@ export const wbCategoryModel = {
         const result = db.prepare('SELECT COUNT(*) as count FROM wb_categories WHERE is_active = 1').get();
         return result.count;
     },
+
+    createSystemCategory() {
+        const db = getDB();
+        try {
+            const result = db
+                .prepare(
+                    `
+                INSERT OR IGNORE INTO wb_categories 
+                (id, name, full_name, catalog_type, is_active, has_children)
+                VALUES (0, 'Отдельные товары', 'Отдельные товары', 'system', 1, 0)
+            `
+                )
+                .run();
+
+            if (result.changes > 0) {
+                console.log('✅ Создана системная категория для отдельных товаров');
+            }
+        } catch (error) {
+            console.error('❌ Ошибка создания системной категории:', error);
+        }
+    },
 };

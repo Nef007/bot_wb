@@ -1,5 +1,6 @@
 import { Composer } from 'grammy';
 import { categoryController } from '../controllers/categoryController.js';
+import { productController } from '../controllers/productController.js';
 
 export function createCategoryComposer() {
     const composer = new Composer();
@@ -84,6 +85,44 @@ export function createCategoryComposer() {
     composer.callbackQuery(/^set_threshold_(\d+)_(\d+)$/, async (ctx) => {
         const [, categoryId, threshold] = ctx.match;
         await categoryController.setThreshold(ctx, parseInt(categoryId), parseInt(threshold));
+    });
+
+    // Добавляем обработчики для товаров
+    composer.on('message', async (ctx, next) => {
+        if (ctx.session.waitingForProductUrl) {
+            await productController.handleProductUrl(ctx);
+            return;
+        }
+        await next();
+    });
+
+    // Обработчики callback queries
+    composer.callbackQuery('add_product', async (ctx) => {
+        await productController.startAddProduct(ctx);
+    });
+
+    composer.callbackQuery(/^product_detail_from_my_(\d+)$/, async (ctx) => {
+        const productNmId = parseInt(ctx.match[1]);
+        await productController.showProductDetail(ctx, productNmId, ctx.callbackQuery.message.message_id, true);
+    });
+
+    // Обработчики для настройки порога товаров
+    composer.callbackQuery(/^set_product_threshold_(\d+)_(\d+)$/, async (ctx) => {
+        const productNmId = parseInt(ctx.match[1]);
+        const threshold = parseInt(ctx.match[2]);
+        await productController.setProductThreshold(ctx, productNmId, threshold);
+    });
+
+    // Обработчики для отписки от товаров
+    composer.callbackQuery(/^unsubscribe_product_(\d+)$/, async (ctx) => {
+        const productNmId = parseInt(ctx.match[1]);
+        await productController.unsubscribeFromProduct(ctx, productNmId);
+    });
+
+    // Обработчики для графика товаров (заглушка)
+    composer.callbackQuery(/^show_product_chart_(\d+)$/, async (ctx) => {
+        const productNmId = parseInt(ctx.match[1]);
+        await productController.showProductChart(ctx, productNmId);
     });
 
     return composer;

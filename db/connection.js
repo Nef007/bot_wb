@@ -18,11 +18,12 @@ export function getDB() {
     return dbInstance;
 }
 
-export function initializeDatabase() {
+export async function initializeDatabase() {
     const db = getDB();
 
     // Создаем базовые таблицы если их нет
     createBaseTables(db);
+
     return db;
 }
 
@@ -102,25 +103,26 @@ function createBaseTables(db) {
             UNIQUE(user_id, category_id)
         );
 
-        -- Таблица товаров
-        CREATE TABLE IF NOT EXISTS products (
-            nm_id INTEGER PRIMARY KEY, -- Артикул WB
-            name TEXT NOT NULL,
-            brand TEXT,
-            brand_id INTEGER,
-            category_id INTEGER NOT NULL,
-            current_price INTEGER NOT NULL, -- цена в копейках
-            rating REAL DEFAULT 0,
-            feedbacks_count INTEGER DEFAULT 0,
-            image_url TEXT,
-            supplier TEXT,
-            supplier_id INTEGER,
-            is_active BOOLEAN DEFAULT 1,
-            first_seen_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-            last_updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (category_id) REFERENCES wb_categories(id) ON DELETE CASCADE
-        );
+  
 
+        -- Таблица товаров
+  CREATE TABLE IF NOT EXISTS products (
+    nm_id INTEGER PRIMARY KEY,
+    name TEXT NOT NULL,
+    brand TEXT,
+    brand_id INTEGER,
+    category_id INTEGER, -- Делаем nullable
+    current_price INTEGER NOT NULL,
+    rating REAL DEFAULT 0,
+    feedbacks_count INTEGER DEFAULT 0,
+    image_url TEXT,
+    supplier TEXT,
+    supplier_id INTEGER,
+    is_active BOOLEAN DEFAULT 1,
+    first_seen_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    last_updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (category_id) REFERENCES wb_categories(id) ON DELETE SET NULL -- Меняем на SET NULL
+);
         -- Таблица истории цен
         CREATE TABLE IF NOT EXISTS price_history (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -146,6 +148,26 @@ function createBaseTables(db) {
             FOREIGN KEY (product_id) REFERENCES products(nm_id) ON DELETE CASCADE
         );
 
+
+              -- Таблица для отслеживания конкретных товаров
+CREATE TABLE IF NOT EXISTS user_product_subscriptions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id TEXT NOT NULL,
+    product_nm_id INTEGER NOT NULL,
+    product_name TEXT NOT NULL,
+    product_brand TEXT,
+    product_image_url TEXT,
+    product_url TEXT NOT NULL,
+    alert_threshold INTEGER DEFAULT 5,
+    is_active BOOLEAN DEFAULT 1,
+    last_scan_at DATETIME,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    UNIQUE(user_id, product_nm_id)
+);
+
+
         -- Таблица настроек мониторинга
         CREATE TABLE IF NOT EXISTS monitoring_settings (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -160,6 +182,12 @@ function createBaseTables(db) {
         );
 
         -- ИНДЕКСЫ ДЛЯ ОПТИМИЗАЦИИ --
+
+
+        -- Индексы для оптимизации
+CREATE INDEX IF NOT EXISTS idx_user_product_subs_user_id ON user_product_subscriptions(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_product_subs_product_id ON user_product_subscriptions(product_nm_id);
+CREATE INDEX IF NOT EXISTS idx_user_product_subs_active ON user_product_subscriptions(is_active);
 
         -- Индексы из старого бота
         CREATE INDEX IF NOT EXISTS idx_subscriptions_userId ON subscriptions(userId);

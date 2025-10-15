@@ -9,6 +9,7 @@ import { productModel } from '../../db/models/productModel.js';
 import { priceHistoryModel } from '../../db/models/priceHistoryModel.js';
 import { notificationManager } from '../../services/notificationManager.js';
 import { BaseMonitoringService } from '../baseMonitoringService.js';
+import { userProductSubscriptionModel } from '../../db/models/userProductSubscriptionModel.js';
 
 export class WBPriceMonitoringService extends BaseMonitoringService {
     constructor() {
@@ -32,20 +33,11 @@ export class WBPriceMonitoringService extends BaseMonitoringService {
             this.isRunning = true;
             console.log(`🔄 Запуск мониторинга ${this.serviceName}...`);
 
-            // ... вся ваша существующая логика мониторинга WB
-            const activeSubscriptions = await userCategorySubscriptionModel.findAllActive();
+            // Мониторинг категорий
+            await this.monitorCategories();
 
-            if (activeSubscriptions.length === 0) {
-                console.log(`ℹ️ Нет активных подписок для мониторинга ${this.serviceName}`);
-                return;
-            }
-
-            console.log(`📊 ${this.serviceName}: найдено активных подписок: ${activeSubscriptions.length}`);
-
-            const categoriesMap = this.groupSubscriptionsByCategory(activeSubscriptions);
-            console.log(`🎯 ${this.serviceName}: уникальных категорий для сканирования: ${categoriesMap.size}`);
-
-            await this.processCategories(categoriesMap);
+            // Мониторинг отдельных товаров
+            await this.monitorProducts();
 
             console.log(`✅ Мониторинг ${this.serviceName} завершен`);
         } catch (error) {
@@ -55,6 +47,29 @@ export class WBPriceMonitoringService extends BaseMonitoringService {
             this.isRunning = false;
         }
     }
+
+    async monitorCategories() {
+        try {
+            const activeSubscriptions = await userCategorySubscriptionModel.findAllActive();
+
+            if (activeSubscriptions.length === 0) {
+                console.log(`ℹ️ Нет активных подписок на категории для мониторинга ${this.serviceName}`);
+                return;
+            }
+
+            console.log(
+                `📊 ${this.serviceName}: найдено активных подписок на категории: ${activeSubscriptions.length}`
+            );
+
+            const categoriesMap = this.groupSubscriptionsByCategory(activeSubscriptions);
+            console.log(`🎯 ${this.serviceName}: уникальных категорий для сканирования: ${categoriesMap.size}`);
+
+            await this.processCategories(categoriesMap);
+        } catch (error) {
+            console.error(`❌ Ошибка мониторинга категорий:`, error);
+        }
+    }
+
     /**
      * Группировка подписок по категориям
      */
@@ -325,6 +340,72 @@ export class WBPriceMonitoringService extends BaseMonitoringService {
      */
     delay(ms) {
         return new Promise((resolve) => setTimeout(resolve, ms));
+    }
+
+    async monitorProducts() {
+        try {
+            const activeProductSubscriptions = await userProductSubscriptionModel.findAllActive();
+
+            if (activeProductSubscriptions.length === 0) {
+                console.log(`ℹ️ Нет активных подписок на товары для мониторинга`);
+                return;
+            }
+
+            console.log(`📦 ${this.serviceName}: найдено подписок на товары: ${activeProductSubscriptions.length}`);
+
+            // Группируем по товарам для избежания дублирования запросов
+            const productsMap = new Map();
+            activeProductSubscriptions.forEach((subscription) => {
+                if (!productsMap.has(subscription.product_nm_id)) {
+                    productsMap.set(subscription.product_nm_id, []);
+                }
+                productsMap.get(subscription.product_nm_id).push(subscription);
+            });
+
+            console.log(`🎯 ${this.serviceName}: уникальных товаров для сканирования: ${productsMap.size}`);
+
+            // Обрабатываем товары
+            const processingPromises = Array.from(productsMap.entries()).map(async ([productNmId, subscriptions]) => {
+                try {
+                    await this.scanAndProcessProduct(productNmId, subscriptions);
+                    await this.delay(1000); // Задержка между запросами
+                } catch (error) {
+                    console.error(`❌ Ошибка обработки товара ${productNmId}:`, error.message);
+                }
+            });
+
+            await Promise.allSettled(processingPromises);
+        } catch (error) {
+            console.error(`❌ Ошибка мониторинга товаров:`, error);
+        }
+    }
+
+    async scanAndProcessProduct(productNmId, subscriptions) {
+        try {
+            console.log(`🔍 Сканируем товар: ${productNmId}`);
+            console.log(`👥 Подписчиков: ${subscriptions.length}`);
+
+            const productData = await this.wbApiService.fetchProductDetail(productNmId);
+
+            if (!productData) {
+                console.log(`❌ Товар ${productNmId} не найден`);
+                return;
+            }
+
+            // Нормализуем данные товара
+            const normalizedProduct = this.normalizeProductData(productData, 0); // category_id = 0 для отдельных товаров
+
+            await this.processProduct(normalizedProduct, subscriptions, { name: 'Отдельный товар' });
+
+            // Обновляем время последнего сканирования для всех подписок на этот товар
+            const updatePromises = subscriptions.map((subscription) =>
+                userProductSubscriptionModel.updateLastScan(subscription.id)
+            );
+
+            await Promise.allSettled(updatePromises);
+        } catch (error) {
+            console.error(`❌ Ошибка сканирования товара ${productNmId}:`, error.message);
+        }
     }
 }
 

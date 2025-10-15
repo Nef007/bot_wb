@@ -1,7 +1,7 @@
 import { InlineKeyboard } from 'grammy';
 import { adminService } from '../services/adminService.js';
-
 import { userCategorySubscriptionModel } from '../db/models/userCategorySubscriptionModel.js';
+import { userProductSubscriptionModel } from '../db/models/userProductSubscriptionModel.js';
 
 export const menuController = {
     getMenu: async (ctx, messageIdToEdit = null) => {
@@ -9,19 +9,27 @@ export const menuController = {
             ctx.session = ctx.session || {};
             const userId = String(ctx.from.id);
 
-            const subscriptionCount = await userCategorySubscriptionModel.getCountByUserId(userId);
+            const categorySubscriptionCount = await userCategorySubscriptionModel.getCountByUserId(userId);
+            const productSubscriptionCount = await userProductSubscriptionModel.getCountByUserId(userId);
 
             const menuHtml = `
-        Добро пожаловать в главное меню!\n\n
+Добро пожаловать в главное меню!\n\n
 📊 <b>Ваша статистика:</b>
-• Активных подписок: <b>${subscriptionCount}</b>
+• Активных подписок на категории: <b>${categorySubscriptionCount}</b>
+• Отслеживаемых товаров: <b>${productSubscriptionCount}</b>
 
 Выберите действие:
         `;
 
             const keyboard = new InlineKeyboard([
                 [InlineKeyboard.text('📂 Категории', 'categories_menu')],
-                [InlineKeyboard.text(`📋 Мои подписки (${subscriptionCount})`, 'my_subscriptions')],
+                [
+                    InlineKeyboard.text(
+                        `📋 Мои подписки (${categorySubscriptionCount + productSubscriptionCount})`,
+                        'my_subscriptions'
+                    ),
+                ],
+                [InlineKeyboard.text('➕ Добавить товар', 'add_product')],
                 [InlineKeyboard.text('💡 Идеи/предложения', 'suggestions')],
                 [InlineKeyboard.text('💰 Подписка', 'subscription_status')],
             ]);

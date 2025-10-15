@@ -117,6 +117,45 @@ export class WildberriesApiService {
         }
     }
 
+    async fetchProductDetail(nmId) {
+        try {
+            const url = 'https://u-card.wb.ru/cards/v4/detail';
+            const params = {
+                appType: 1,
+                curr: 'rub',
+                dest: -1257786,
+                spp: 30,
+                hide_dtype: 11,
+                ab_testing: false,
+                lang: 'ru',
+                nm: nmId,
+            };
+
+            console.log(`📡 Запрос информации о товаре ${nmId}...`);
+
+            const response = await this.axiosInstance.get(url, {
+                params,
+                timeout: 15000,
+                headers: {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                    Accept: 'application/json',
+                    Referer: `https://www.wildberries.ru/catalog/${nmId}/detail.aspx`,
+                },
+            });
+
+            if (!response.data?.products?.[0]) {
+                console.log(`❌ Товар ${nmId} не найден в ответе API`);
+                return null;
+            }
+
+            console.log(`✅ Получена информация о товаре ${nmId}`);
+            return response.data.products[0];
+        } catch (error) {
+            console.error(`❌ Ошибка получения товара ${nmId}:`, error.message);
+            return null;
+        }
+    }
+
     buildCategoryQuery(category) {
         if (category.search_query) {
             return category.search_query;
