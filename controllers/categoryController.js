@@ -3,7 +3,6 @@ import { wbCategoryModel } from '../db/models/wbCategory.js';
 import { userCategorySubscriptionModel } from '../db/models/userCategorySubscriptionModel.js';
 import dayjs from 'dayjs';
 import { userProductSubscriptionModel } from '../db/models/userProductSubscriptionModel.js';
-import { productController } from './productController.js';
 
 export const categoryController = {
     showCategories: async (ctx, parentId = null, messageIdToEdit = null) => {
@@ -124,9 +123,7 @@ export const categoryController = {
 
 📊 <b>Текущие настройки:</b>
 • Порог уведомлений: ${subscription.alert_threshold}%
-• Страниц для сканирования: ${subscription.scan_pages}
-• Интервал проверки: ${subscription.scan_interval_minutes} мин.
-• Макс. товаров: ${subscription.max_products}
+
 
 🕒 <b>Последняя проверка:</b>
 ${subscription.last_scan_at ? dayjs(subscription.last_scan_at).format('DD.MM.YYYY HH:mm') : 'Еще не было'}
@@ -143,9 +140,8 @@ ${subscription.last_scan_at ? dayjs(subscription.last_scan_at).format('DD.MM.YYY
 • Новые поступления
 
 📊 <b>Настройки по умолчанию:</b>
-• Порог уведомлений: 5%
-• Проверка: каждые 10 минут
-• Страниц для сканирования: 10
+• Порог уведомлений: 10%
+
                 `;
             }
 
@@ -220,8 +216,6 @@ ${subscription.last_scan_at ? dayjs(subscription.last_scan_at).format('DD.MM.YYY
             const subscriptionId = await userCategorySubscriptionModel.create(userId, categoryId, {
                 alertThreshold: 10,
                 scanPages: 10,
-                scanInterval: 10,
-                maxProducts: 1000,
             });
 
             console.log(`✅ Пользователь ${userId} подписан на категорию ${categoryId}`);
@@ -259,9 +253,7 @@ ${subscription.last_scan_at ? dayjs(subscription.last_scan_at).format('DD.MM.YYY
 
 📊 <b>Текущие настройки:</b>
 • Порог уведомлений: ${subscription.alert_threshold}%
-• Страниц для сканирования: ${subscription.scan_pages}
-• Интервал проверки: ${subscription.scan_interval_minutes} мин.
-• Макс. товаров: ${subscription.max_products}
+
 
 🕒 <b>Последняя проверка:</b>
 ${subscription.last_scan_at ? dayjs(subscription.last_scan_at).format('DD.MM.YYYY HH:mm') : 'Еще не было'}

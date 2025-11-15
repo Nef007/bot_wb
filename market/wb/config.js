@@ -7,9 +7,6 @@ export const PriceMonitoringConfig = {
         REQUEST_TIMEOUT: 20000,
         MONITORING_INTERVAL_MINUTES: 10,
     },
-    PRICE: {
-        CHANGE_THRESHOLD: 0.01, // Минимальное изменение цены для уведомления (1%)
-    },
     IMAGE: {
         BASE_URL: 'https://basket-{host}.wbbasket.ru',
         HOST_RANGES: [
@@ -37,7 +34,9 @@ export const PriceMonitoringConfig = {
             { min: 3702, max: 3917, host: '22' },
             { min: 3918, max: 4133, host: '23' },
             { min: 4134, max: 4349, host: '24' },
-            { min: 4350, max: Infinity, host: '25' },
+            { min: 4350, max: 4565, host: '25' },
+            { min: 4566, max: 4781, host: '26' },
+            { min: 4782, max: Infinity, host: '27' },
         ],
     },
 };

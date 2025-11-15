@@ -165,4 +165,20 @@ export const productModel = {
         const db = getDB();
         db.prepare('UPDATE products SET is_active = 0 WHERE nm_id = ?').run(nmId);
     },
+
+    getPriceHistory: (productId, limit = 20) => {
+        const db = getDB();
+
+        return db
+            .prepare(
+                `
+        SELECT ph.price, ph.timestamp
+        FROM price_history ph
+        WHERE ph.product_id = ?
+        ORDER BY ph.timestamp ASC
+        LIMIT ?
+    `
+            )
+            .all(productId, limit);
+    },
 };

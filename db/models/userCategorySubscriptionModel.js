@@ -10,18 +10,11 @@ export const userCategorySubscriptionModel = {
             .prepare(
                 `
             INSERT INTO user_category_subscriptions 
-            (user_id, category_id, alert_threshold, scan_pages, scan_interval_minutes, max_products) 
-            VALUES (?, ?, ?, ?, ?, ?)
+            (user_id, category_id, alert_threshold, scan_pages) 
+            VALUES (?, ?, ?, ?)
         `
             )
-            .run(
-                userId,
-                categoryId,
-                settings.alertThreshold || 5,
-                settings.scanPages || 10,
-                settings.scanInterval || 10,
-                settings.maxProducts || 1000
-            );
+            .run(userId, categoryId, settings.alertThreshold || 5, settings.scanPages || 10);
 
         console.log(`✅ Создана новая подписка ID: ${result.lastInsertRowid}`);
         return result.lastInsertRowid;
@@ -101,10 +94,10 @@ export const userCategorySubscriptionModel = {
         db.prepare(
             `
             UPDATE user_category_subscriptions 
-            SET scan_pages = ?, scan_interval_minutes = ?, max_products = ?, updated_at = CURRENT_TIMESTAMP
+            SET scan_pages = ?, updated_at = CURRENT_TIMESTAMP
             WHERE id = ?
         `
-        ).run(settings.scanPages, settings.scanInterval, settings.maxProducts, subscriptionId);
+        ).run(settings.scanPages, subscriptionId);
     },
 
     /**

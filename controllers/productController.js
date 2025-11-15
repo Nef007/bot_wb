@@ -271,8 +271,22 @@ ${subscription.last_scan_at ? new Date(subscription.last_scan_at).toLocaleString
      */
     showProductChart: async (ctx, productNmId) => {
         try {
-            await ctx.answerCallbackQuery({
-                text: '📊 Функция графика цен скоро будет доступна!',
+            // Получаем историю цен из базы данных
+            const priceHistory = await productModel.getPriceHistory(productNmId);
+
+            if (!priceHistory || priceHistory.length === 0) {
+                await ctx.answerCallbackQuery({
+                    text: '❌ Нет данных по истории цен для этого товара',
+                });
+                return;
+            }
+
+            // Генерируем текстовый график
+            const chart = generatePriceChart(priceHistory);
+
+            // Отправляем пользователю
+            await ctx.reply(chart, {
+                parse_mode: 'HTML',
             });
         } catch (e) {
             console.error('ОШИБКА ПОКАЗА ГРАФИКА', e);
@@ -280,3 +294,88 @@ ${subscription.last_scan_at ? new Date(subscription.last_scan_at).toLocaleString
         }
     },
 };
+
+function generatePriceChart(priceHistory) {
+    if (priceHistory.length < 2) {
+        return '📊 Недостаточно данных для построения графика';
+    }
+
+    // Преобразуем даты и цены
+    const data = priceHistory.map((item) => ({
+        price: Math.round(item.price / 100), // переводим в рубли
+        date: new Date(item.timestamp).toLocaleDateString('ru-RU', {
+            day: '2-digit',
+            month: '2-digit',
+        }),
+    }));
+
+    // Находим min и max цены для масштабирования
+    const prices = data.map((d) => d.price);
+    const minPrice = Math.min(...prices);
+    const maxPrice = Math.max(...prices);
+    const priceRange = maxPrice - minPrice;
+
+    // Определяем уровни для графика (5-7 уровней)
+    const levels = 6;
+    const step = priceRange / (levels - 1);
+
+    // Создаем уровни цен
+    const priceLevels = [];
+    for (let i = 0; i < levels; i++) {
+        priceLevels.push(Math.round(maxPrice - i * step));
+    }
+
+    // Создаем график
+    let chart = '📊 <b>История цены:</b>\n<pre>';
+
+    // Добавляем ценовые уровни и график
+    priceLevels.forEach((level) => {
+        const formattedPrice = formatPrice(level);
+        const line = data
+            .map((point, index) => {
+                if (index === data.length - 1) {
+                    // Последняя точка - кружок ●
+                    return Math.abs(point.price - level) < step / 2 ? '●' : ' ';
+                } else {
+                    // Промежуточные точки - квадраты ■
+                    return Math.abs(point.price - level) < step / 2 ? '■' : ' ';
+                }
+            })
+            .join(' ');
+
+        chart += `${formattedPrice} ┤ ${line}\n`;
+    });
+
+    // Добавляем ось времени
+    chart += '────────┼' + '─'.repeat(data.length * 2 - 1) + '\n';
+    chart += '        ';
+
+    // Добавляем даты (каждую вторую для читаемости)
+    data.forEach((point, index) => {
+        if (index % 2 === 0 || index === data.length - 1) {
+            chart += point.date + ' ';
+        } else {
+            chart += '   ';
+        }
+    });
+
+    chart += '</pre>';
+
+    // Добавляем текущую цену
+    const currentPrice = data[data.length - 1].price;
+    chart += `\n💰 <b>Текущая цена:</b> ${formatPrice(currentPrice)}`;
+
+    return chart;
+}
+
+/**
+ * Форматировать цену в читаемом виде
+ */
+function formatPrice(price) {
+    return (
+        new Intl.NumberFormat('ru-RU', {
+            minimumFractionDigits: 0,
+            maximumFractionDigits: 0,
+        }).format(price) + '₽'
+    );
+}

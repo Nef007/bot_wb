@@ -29,7 +29,7 @@ export async function initializeDatabase() {
 
 function createBaseTables(db) {
     db.exec(`
-        -- Таблица пользователей (сохраняем из старого бота)
+       
         CREATE TABLE IF NOT EXISTS users (
             id TEXT PRIMARY KEY,
             username TEXT NOT NULL,
@@ -38,7 +38,7 @@ function createBaseTables(db) {
             role TEXT DEFAULT 'USER' CHECK(role IN ('USER', 'ADMIN'))
         );
 
-        -- Таблица подписок (сохраняем из старого бота)
+    
         CREATE TABLE IF NOT EXISTS subscriptions (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             userId TEXT NOT NULL UNIQUE,
@@ -51,7 +51,6 @@ function createBaseTables(db) {
             FOREIGN KEY (userId) REFERENCES users(id) ON DELETE CASCADE
         );
 
-        -- Таблица заказов (сохраняем из старого бота)
         CREATE TABLE IF NOT EXISTS orders (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             userId TEXT NOT NULL,
@@ -66,7 +65,7 @@ function createBaseTables(db) {
             FOREIGN KEY (userId) REFERENCES users(id) ON DELETE CASCADE
         );
 
-        -- НОВЫЕ ТАБЛИЦЫ ДЛЯ МОНИТОРИНГА WB --
+       
 
  CREATE TABLE IF NOT EXISTS wb_categories (
             id INTEGER PRIMARY KEY,
@@ -132,21 +131,7 @@ function createBaseTables(db) {
             FOREIGN KEY (product_id) REFERENCES products(nm_id) ON DELETE CASCADE
         );
 
-        -- Таблица уведомлений
-        CREATE TABLE IF NOT EXISTS price_alerts (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id TEXT NOT NULL,
-            product_id INTEGER NOT NULL,
-            old_price INTEGER NOT NULL,
-            new_price INTEGER NOT NULL,
-            percent_change REAL NOT NULL,
-            threshold INTEGER NOT NULL,
-            is_sent BOOLEAN DEFAULT 0,
-            sent_at DATETIME,
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-            FOREIGN KEY (product_id) REFERENCES products(nm_id) ON DELETE CASCADE
-        );
+      
 
 
               -- Таблица для отслеживания конкретных товаров
@@ -168,23 +153,10 @@ CREATE TABLE IF NOT EXISTS user_product_subscriptions (
 );
 
 
-        -- Таблица настроек мониторинга
-        CREATE TABLE IF NOT EXISTS monitoring_settings (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id TEXT NOT NULL UNIQUE,
-            scan_pages_per_category INTEGER DEFAULT 10,
-            scan_interval_minutes INTEGER DEFAULT 10,
-            max_products_per_category INTEGER DEFAULT 1000,
-            receive_daily_digest BOOLEAN DEFAULT 1,
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-        );
+    
 
         -- ИНДЕКСЫ ДЛЯ ОПТИМИЗАЦИИ --
 
-
-        -- Индексы для оптимизации
 CREATE INDEX IF NOT EXISTS idx_user_product_subs_user_id ON user_product_subscriptions(user_id);
 CREATE INDEX IF NOT EXISTS idx_user_product_subs_product_id ON user_product_subscriptions(product_nm_id);
 CREATE INDEX IF NOT EXISTS idx_user_product_subs_active ON user_product_subscriptions(is_active);
@@ -208,10 +180,7 @@ CREATE INDEX IF NOT EXISTS idx_user_product_subs_active ON user_product_subscrip
         CREATE INDEX IF NOT EXISTS idx_price_history_product_id ON price_history(product_id);
         CREATE INDEX IF NOT EXISTS idx_price_history_timestamp ON price_history(timestamp);
         
-        CREATE INDEX IF NOT EXISTS idx_price_alerts_user_id ON price_alerts(user_id);
-        CREATE INDEX IF NOT EXISTS idx_price_alerts_product_id ON price_alerts(product_id);
-        CREATE INDEX IF NOT EXISTS idx_price_alerts_sent ON price_alerts(is_sent);
-        CREATE INDEX IF NOT EXISTS idx_price_alerts_created_at ON price_alerts(created_at);
+        
         
         CREATE INDEX IF NOT EXISTS idx_wb_categories_parent_id ON wb_categories(parent_id);
         CREATE INDEX IF NOT EXISTS idx_wb_categories_active ON wb_categories(is_active);
