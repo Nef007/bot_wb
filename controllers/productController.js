@@ -304,15 +304,18 @@ function generatePriceList(priceHistory) {
         return '📊 Недостаточно данных по ценам';
     }
 
+    // Переворачиваем порядок, чтобы старые цены были вверху, новые - внизу
+    const reversedHistory = [...priceHistory].reverse();
+
     // Находим минимальную и максимальную цены
-    const prices = priceHistory.map((item) => item.price);
+    const prices = reversedHistory.map((item) => item.price);
     const minPrice = Math.min(...prices);
     const maxPrice = Math.max(...prices);
 
     let message = '📊 <b>История цен:</b>\n\n';
 
-    priceHistory.forEach((item, index) => {
-        const price = Math.round(item.price); // переводим в рубли
+    reversedHistory.forEach((item, index) => {
+        const price = Math.round(item.price);
         const date = new Date(item.timestamp).toLocaleDateString('ru-RU', {
             day: '2-digit',
             month: '2-digit',
@@ -329,7 +332,8 @@ function generatePriceList(priceHistory) {
             emoji = '🟢'; // зеленая точка для минимальной цены
         } else if (item.price === maxPrice) {
             emoji = '🔴'; // красная точка для максимальной цены
-        } else if (index === 0) {
+        } else if (index === reversedHistory.length - 1) {
+            // последний элемент (самый новый)
             emoji = '⚫'; // черная точка для текущей цены
         } else {
             emoji = '🔹'; // синий ромб для остальных
@@ -340,6 +344,7 @@ function generatePriceList(priceHistory) {
 
     // Добавляем статистику
     message += `\n📈 <b>Статистика:</b>\n`;
+    message += `⚫ Текущая: <b>${formatPrice(Math.round(reversedHistory[reversedHistory.length - 1].price))}</b>\n`;
     message += `🟢 Минимальная: <b>${formatPrice(Math.round(minPrice))}</b>\n`;
     message += `🔴 Максимальная: <b>${formatPrice(Math.round(maxPrice))}</b>\n`;
     message += `📊 Разница: <b>${formatPrice(Math.round(maxPrice - minPrice))}</b>`;
