@@ -284,8 +284,12 @@ ${subscription.last_scan_at ? new Date(subscription.last_scan_at).toLocaleString
             // Генерируем текстовый график
             const priceList = generatePriceList(priceHistory);
 
-            // Отправляем пользователю
-            await ctx.reply(priceList, {
+            // Создаем клавиатуру для возврата
+            const keyboard = new InlineKeyboard().text('⬅️ Назад к товару', `product_detail_from_my_${productNmId}`);
+
+            // Заменяем текущее сообщение
+            await ctx.editMessageText(priceList, {
+                reply_markup: keyboard,
                 parse_mode: 'HTML',
             });
         } catch (e) {
@@ -308,7 +312,7 @@ function generatePriceList(priceHistory) {
     let message = '📊 <b>История цен:</b>\n\n';
 
     priceHistory.forEach((item, index) => {
-        const price = Math.round(item.price / 100); // переводим в рубли
+        const price = Math.round(item.price); // переводим в рубли
         const date = new Date(item.timestamp).toLocaleDateString('ru-RU', {
             day: '2-digit',
             month: '2-digit',
@@ -317,7 +321,7 @@ function generatePriceList(priceHistory) {
             minute: '2-digit',
         });
 
-        const formattedPrice = price;
+        const formattedPrice = formatPrice(price);
 
         // Определяем смайлы для мин/макс цен
         let emoji = '';
@@ -336,9 +340,9 @@ function generatePriceList(priceHistory) {
 
     // Добавляем статистику
     message += `\n📈 <b>Статистика:</b>\n`;
-    message += `🟢 Минимальная: <b>${formatPrice(Math.round(minPrice / 100))}</b>\n`;
-    message += `🔴 Максимальная: <b>${formatPrice(Math.round(maxPrice / 100))}</b>\n`;
-    message += `📊 Разница: <b>${formatPrice(Math.round((maxPrice - minPrice) / 100))}</b>`;
+    message += `🟢 Минимальная: <b>${formatPrice(Math.round(minPrice))}</b>\n`;
+    message += `🔴 Максимальная: <b>${formatPrice(Math.round(maxPrice))}</b>\n`;
+    message += `📊 Разница: <b>${formatPrice(Math.round(maxPrice - minPrice))}</b>`;
 
     return message;
 }
