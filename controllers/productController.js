@@ -317,7 +317,7 @@ function generatePriceList(priceHistory) {
             minute: '2-digit',
         });
 
-        const formattedPrice = formatPrice(price);
+        const formattedPrice = price;
 
         // Определяем смайлы для мин/макс цен
         let emoji = '';
