@@ -344,7 +344,7 @@ function generatePriceList(priceHistory) {
 
     // Добавляем статистику
     message += `\n📈 <b>Статистика:</b>\n`;
-    message += `⚫ Текущая: <b>${formatPrice(Math.round(reversedHistory[priceHistory.length - 1].price))}</b>\n`;
+    message += `⚫ Текущая: <b>${formatPrice(Math.round(priceHistory[priceHistory.length - 1].price))}</b>\n`;
     message += `🟢 Минимальная: <b>${formatPrice(Math.round(minPrice))}</b>\n`;
     message += `🔴 Максимальная: <b>${formatPrice(Math.round(maxPrice))}</b>\n`;
     message += `📊 Разница: <b>${formatPrice(Math.round(maxPrice - minPrice))}</b>`;
