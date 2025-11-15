@@ -305,10 +305,10 @@ function generatePriceList(priceHistory) {
     }
 
     // Переворачиваем порядок, чтобы старые цены были вверху, новые - внизу
-    const reversedHistory = [...priceHistory].reverse();
+    // const reversedHistory = [...priceHistory].reverse();
 
     // Находим минимальную и максимальную цены
-    const prices = reversedHistory.map((item) => item.price);
+    const prices = priceHistory.map((item) => item.price);
     const minPrice = Math.min(...prices);
     const maxPrice = Math.max(...prices);
 
@@ -332,7 +332,7 @@ function generatePriceList(priceHistory) {
             emoji = '🟢'; // зеленая точка для минимальной цены
         } else if (item.price === maxPrice) {
             emoji = '🔴'; // красная точка для максимальной цены
-        } else if (index === 0) {
+        } else if (index === reversedHistory.length - 1) {
             // последний элемент (самый новый)
             emoji = '⚫'; // черная точка для текущей цены
         } else {
