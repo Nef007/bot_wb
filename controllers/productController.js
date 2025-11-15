@@ -282,10 +282,10 @@ ${subscription.last_scan_at ? new Date(subscription.last_scan_at).toLocaleString
             }
 
             // Генерируем текстовый график
-            const chart = generatePriceChart(priceHistory);
+            const priceList = generatePriceList(priceHistory);
 
             // Отправляем пользователю
-            await ctx.reply(chart, {
+            await ctx.reply(priceList, {
                 parse_mode: 'HTML',
             });
         } catch (e) {
@@ -295,77 +295,52 @@ ${subscription.last_scan_at ? new Date(subscription.last_scan_at).toLocaleString
     },
 };
 
-function generatePriceChart(priceHistory) {
-    if (priceHistory.length < 2) {
-        return '📊 Недостаточно данных для построения графика';
+function generatePriceList(priceHistory) {
+    if (priceHistory.length === 0) {
+        return '📊 Недостаточно данных по ценам';
     }
 
-    // Преобразуем даты и цены
-    const data = priceHistory.map((item) => ({
-        price: Math.round(item.price / 100), // переводим в рубли
-        date: new Date(item.timestamp).toLocaleDateString('ru-RU', {
-            day: '2-digit',
-            month: '2-digit',
-        }),
-    }));
-
-    // Находим min и max цены для масштабирования
-    const prices = data.map((d) => d.price);
+    // Находим минимальную и максимальную цены
+    const prices = priceHistory.map((item) => item.price);
     const minPrice = Math.min(...prices);
     const maxPrice = Math.max(...prices);
-    const priceRange = maxPrice - minPrice;
 
-    // Определяем уровни для графика (5-7 уровней)
-    const levels = 6;
-    const step = priceRange / (levels - 1);
+    let message = '📊 <b>История цен:</b>\n\n';
 
-    // Создаем уровни цен
-    const priceLevels = [];
-    for (let i = 0; i < levels; i++) {
-        priceLevels.push(Math.round(maxPrice - i * step));
-    }
+    priceHistory.forEach((item, index) => {
+        const price = Math.round(item.price / 100); // переводим в рубли
+        const date = new Date(item.timestamp).toLocaleDateString('ru-RU', {
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+        });
 
-    // Создаем график
-    let chart = '📊 <b>История цены:</b>\n<pre>';
+        const formattedPrice = formatPrice(price);
 
-    // Добавляем ценовые уровни и график
-    priceLevels.forEach((level) => {
-        const formattedPrice = formatPrice(level);
-        const line = data
-            .map((point, index) => {
-                if (index === data.length - 1) {
-                    // Последняя точка - кружок ●
-                    return Math.abs(point.price - level) < step / 2 ? '●' : ' ';
-                } else {
-                    // Промежуточные точки - квадраты ■
-                    return Math.abs(point.price - level) < step / 2 ? '■' : ' ';
-                }
-            })
-            .join(' ');
-
-        chart += `${formattedPrice} ┤ ${line}\n`;
-    });
-
-    // Добавляем ось времени
-    chart += '────────┼' + '─'.repeat(data.length * 2 - 1) + '\n';
-    chart += '        ';
-
-    // Добавляем даты (каждую вторую для читаемости)
-    data.forEach((point, index) => {
-        if (index % 2 === 0 || index === data.length - 1) {
-            chart += point.date + ' ';
+        // Определяем смайлы для мин/макс цен
+        let emoji = '';
+        if (item.price === minPrice) {
+            emoji = '🟢'; // зеленая точка для минимальной цены
+        } else if (item.price === maxPrice) {
+            emoji = '🔴'; // красная точка для максимальной цены
+        } else if (index === 0) {
+            emoji = '⚫'; // черная точка для текущей цены
         } else {
-            chart += '   ';
+            emoji = '🔹'; // синий ромб для остальных
         }
+
+        message += `${emoji} <b>${formattedPrice}</b> - ${date}\n`;
     });
 
-    chart += '</pre>';
+    // Добавляем статистику
+    message += `\n📈 <b>Статистика:</b>\n`;
+    message += `🟢 Минимальная: <b>${formatPrice(Math.round(minPrice / 100))}</b>\n`;
+    message += `🔴 Максимальная: <b>${formatPrice(Math.round(maxPrice / 100))}</b>\n`;
+    message += `📊 Разница: <b>${formatPrice(Math.round((maxPrice - minPrice) / 100))}</b>`;
 
-    // Добавляем текущую цену
-    const currentPrice = data[data.length - 1].price;
-    chart += `\n💰 <b>Текущая цена:</b> ${formatPrice(currentPrice)}`;
-
-    return chart;
+    return message;
 }
 
 /**
