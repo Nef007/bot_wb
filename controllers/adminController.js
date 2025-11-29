@@ -104,7 +104,7 @@ export const adminController = {
         message += `👤 Имя: ${user.username || 'Не указано'}\n`;
         message += `📊 Статус: ${user.status === 'ACTIVE' ? '✅ Активен' : '❌ Заблокирован'}\n`;
         message += `👑 Роль: ${user.role}\n`;
-        message += `📅 Регистрация: ${dayjs(user.createdAt).format('DD.MM.YYYY HH:mm')}\n\n`;
+        message += `📅 Регистрация: ${dayjs(user.created_at).format('DD.MM.YYYY HH:mm')}\n\n`;
 
         message += `💳 <b>Подписка:</b> `;
         if (subscription) {
@@ -165,7 +165,7 @@ export const adminController = {
         } else {
             orders.forEach((order) => {
                 const emoji = order.status === 'PAID' ? '✅' : order.status === 'PENDING' ? '⏳' : '❌';
-                const date = dayjs(order.createdAt).format('DD.MM.YYYY');
+                const date = dayjs(order.created_at).format('DD.MM.YYYY');
 
                 keyboard
                     .text(
@@ -206,7 +206,7 @@ export const adminController = {
         message += `📦 Тариф: ${order.planType}\n`;
         message += `💰 Сумма: ${order.amount} руб.\n`;
         message += `📊 Статус: ${order.status}\n`;
-        message += `📅 Создан: ${dayjs(order.createdAt).format('DD.MM.YYYY HH:mm')}\n`;
+        message += `📅 Создан: ${dayjs(order.created_at).format('DD.MM.YYYY HH:mm')}\n`;
 
         const keyboard = new InlineKeyboard();
 

@@ -12,7 +12,7 @@ export const productModel = {
         const categoryId = productData.category_id === 0 ? null : productData.category_id;
 
         // Сначала проверяем существует ли товар
-        const existingProduct = db.prepare('SELECT nm_id FROM products WHERE nm_id = ?').get(productData.nm_id);
+        const existingProduct = db.prepare('SELECT id FROM products WHERE id = ?').get(productData.id);
 
         // Если товара нет - создаем новый
         if (!existingProduct) {
@@ -20,13 +20,13 @@ export const productModel = {
                 .prepare(
                     `
                 INSERT INTO products 
-                (nm_id, name, brand, brand_id, category_id, current_price, rating, 
+                (id, name, brand, brand_id, category_id, current_price, rating, 
                  feedbacks_count, image_url, supplier, supplier_id)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             `
                 )
                 .run(
-                    productData.nm_id,
+                    productData.id,
                     productData.name,
                     productData.brand,
                     productData.brandId,
@@ -46,8 +46,8 @@ export const productModel = {
             SET name = ?, brand = ?, brand_id = ?, category_id = ?, 
                 current_price = ?, rating = ?, feedbacks_count = ?, 
                 image_url = ?, supplier = ?, supplier_id = ?, 
-                last_updated_at = CURRENT_TIMESTAMP
-            WHERE nm_id = ?
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
         `);
 
         return updateStmt.run(
@@ -61,7 +61,7 @@ export const productModel = {
             productData.image_url,
             productData.supplier,
             productData.supplier_id,
-            productData.nm_id
+            productData.id
         );
     },
 
@@ -74,8 +74,8 @@ export const productModel = {
         SET name = ?, brand = ?, brand_id = ?, category_id = ?, 
             current_price = ?, rating = ?, feedbacks_count = ?, 
             image_url = ?, supplier = ?, supplier_id = ?, 
-            last_updated_at = CURRENT_TIMESTAMP
-        WHERE nm_id = ?
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
     `);
 
         const updateResult = updateStmt.run(
@@ -89,20 +89,20 @@ export const productModel = {
             productData.image_url,
             productData.supplier,
             productData.supplier_id,
-            productData.nm_id
+            productData.id
         );
 
         // Если не обновили ни одной строки, значит товара нет - создаем
         if (updateResult.changes === 0) {
             const insertStmt = db.prepare(`
             INSERT INTO products 
-            (nm_id, name, brand, brand_id, category_id, current_price, rating, 
-             feedbacks_count, image_url, supplier, supplier_id, first_seen_at, last_updated_at)
+            (id, name, brand, brand_id, category_id, current_price, rating, 
+             feedbacks_count, image_url, supplier, supplier_id, created_at, updated_at)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
         `);
 
             return insertStmt.run(
-                productData.nm_id,
+                productData.id,
                 productData.name,
                 productData.brand,
                 productData.brandId,
@@ -124,7 +124,7 @@ export const productModel = {
      */
     findByNmId(nmId) {
         const db = getDB();
-        return db.prepare('SELECT * FROM products WHERE nm_id = ?').get(nmId);
+        return db.prepare('SELECT * FROM products WHERE id = ?').get(nmId);
     },
 
     /**
@@ -137,7 +137,7 @@ export const productModel = {
                 `
             SELECT * FROM products 
             WHERE category_id = ? AND is_active = 1 
-            ORDER BY last_updated_at DESC 
+            ORDER BY updated_at DESC 
             LIMIT ?
         `
             )
@@ -152,8 +152,8 @@ export const productModel = {
         db.prepare(
             `
             UPDATE products 
-            SET current_price = ?, last_updated_at = CURRENT_TIMESTAMP
-            WHERE nm_id = ?
+            SET current_price = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
         `
         ).run(newPrice, nmId);
     },
@@ -163,7 +163,7 @@ export const productModel = {
      */
     deactivate(nmId) {
         const db = getDB();
-        db.prepare('UPDATE products SET is_active = 0 WHERE nm_id = ?').run(nmId);
+        db.prepare('UPDATE products SET is_active = 0 WHERE id = ?').run(nmId);
     },
 
     getPriceHistory: (productId, limit = 20) => {
@@ -172,10 +172,10 @@ export const productModel = {
         return db
             .prepare(
                 `
-        SELECT ph.price, ph.timestamp
+        SELECT ph.price, ph.created_at
         FROM price_history ph
         WHERE ph.product_id = ?
-        ORDER BY ph.timestamp ASC
+        ORDER BY ph.created_at ASC
         LIMIT ?
     `
             )

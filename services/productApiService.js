@@ -68,7 +68,7 @@ export class ProductApiService {
         const validImageUrl = await this.findWorkingImageUrl(productData.id);
 
         return {
-            nm_id: productData.id,
+            id: productData.id,
             name: productData.name || 'Неизвестный товар',
             brand: productData.brand || '',
             brandId: productData.brandId || 0,

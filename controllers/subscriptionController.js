@@ -177,13 +177,12 @@ export const subscriptionController = {
         message += `💰 <b>Тариф:</b> ${planNames[order.planType] || order.planType}\n`;
         message += `💳 <b>Сумма:</b> ${order.amount || 0} руб.\n`;
         message += `📊 <b>Статус:</b> ${isTrial ? '✅ Активен' : statusText}\n`;
-        message += `🕐 <b>Создан:</b> ${dayjs(order.createdAt).format('DD.MM.YYYY HH:mm:ss')}\n`;
-        message += `🔄 <b>Обновлен:</b> ${dayjs(order.updatedAt).format('DD.MM.YYYY HH:mm:ss')}\n`;
+        message += `🕐 <b>Создан:</b> ${dayjs(order.created_at).format('DD.MM.YYYY HH:mm:ss')}\n`;
+        message += `🔄 <b>Обновлен:</b> ${dayjs(order.updated_at).format('DD.MM.YYYY HH:mm:ss')}\n`;
 
-
-          subscription.last_scan_at
-        ? dayjs(subscription.last_scan_at).tz('Europe/Moscow').format('DD.MM.YYYY HH:mm')
-        : 'Еще не было'
+        subscription.last_scan_at
+            ? dayjs(subscription.last_scan_at).tz('Europe/Moscow').format('DD.MM.YYYY HH:mm')
+            : 'Еще не было';
         // Добавляем информацию о последней проверке
         if (paymentStatus && paymentStatus.timestamp) {
             message += `🔍 <b>Последняя проверка:</b> ${dayjs(paymentStatus.timestamp).format(
@@ -326,7 +325,7 @@ export const subscriptionController = {
             } else {
                 orders.forEach((order) => {
                     const emoji = subscriptionController.getStatusEmoji(order.status);
-                    const date = dayjs(order.createdAt).format('DD.MM.YYYY');
+                    const date = dayjs(order.created_at).format('DD.MM.YYYY');
                     const amount = order.amount > 0 ? `${order.amount} руб.` : 'Бесплатно';
                     const shortOrderNumber = order.orderNumber.slice(-6);
 

@@ -10,13 +10,13 @@ export const userProductSubscriptionModel = {
             .prepare(
                 `
             INSERT INTO user_product_subscriptions 
-            (user_id, product_nm_id, product_name, product_brand, product_image_url, product_url, alert_threshold) 
+            (user_id, product_id, product_name, product_brand, product_image_url, product_url, alert_threshold) 
             VALUES (?, ?, ?, ?, ?, ?, ?)
         `
             )
             .run(
                 userId,
-                productData.nm_id,
+                productData.id,
                 productData.name,
                 productData.brand || '',
                 productData.image_url || '',
@@ -38,8 +38,8 @@ export const userProductSubscriptionModel = {
                 `
             SELECT ups.*, p.current_price, p.rating, p.feedbacks_count
             FROM user_product_subscriptions ups
-            LEFT JOIN products p ON ups.product_nm_id = p.nm_id
-            WHERE ups.user_id = ? AND ups.product_nm_id = ?
+            LEFT JOIN products p ON ups.product_id = p.id
+            WHERE ups.user_id = ? AND ups.product_id = ?
         `
             )
             .get(userId, productNmId);
@@ -54,15 +54,15 @@ export const userProductSubscriptionModel = {
             .prepare(
                 `
             SELECT ups.*, p.current_price, p.rating, p.feedbacks_count, 
-                   ph.price as last_price, ph.timestamp as price_updated_at
+                   ph.price as last_price, ph.created_at as price_updated_at
             FROM user_product_subscriptions ups
-            LEFT JOIN products p ON ups.product_nm_id = p.nm_id
+            LEFT JOIN products p ON ups.product_id = p.id
             LEFT JOIN price_history ph ON (
-                ph.product_id = ups.product_nm_id 
+                ph.product_id = ups.product_id 
                 AND ph.id = (
                     SELECT id FROM price_history 
-                    WHERE product_id = ups.product_nm_id 
-                    ORDER BY timestamp DESC LIMIT 1
+                    WHERE product_id = ups.product_id 
+                    ORDER BY created_at DESC LIMIT 1
                 )
             )
             WHERE ups.user_id = ?
@@ -109,7 +109,7 @@ export const userProductSubscriptionModel = {
     deleteByUserAndProduct(userId, productNmId) {
         const db = getDB();
         const result = db
-            .prepare('DELETE FROM user_product_subscriptions WHERE user_id = ? AND product_nm_id = ?')
+            .prepare('DELETE FROM user_product_subscriptions WHERE user_id = ? AND product_id = ?')
             .run(userId, productNmId);
         console.log(`❌ Удалена подписка пользователя ${userId} на товар ${productNmId}`);
         return result.changes;
@@ -156,7 +156,7 @@ export const userProductSubscriptionModel = {
                 `
             SELECT COUNT(*) as count 
             FROM user_product_subscriptions 
-            WHERE user_id = ? AND product_nm_id = ? AND is_active = 1
+            WHERE user_id = ? AND product_id = ? AND is_active = 1
         `
             )
             .get(userId, productNmId);

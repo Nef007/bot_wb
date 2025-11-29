@@ -34,7 +34,7 @@ function createBaseTables(db) {
             id TEXT PRIMARY KEY,
             username TEXT NOT NULL,
             status TEXT DEFAULT 'ACTIVE' CHECK(status IN ('ACTIVE', 'BLOCKED', 'PENDING')),
-            createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             role TEXT DEFAULT 'USER' CHECK(role IN ('USER', 'ADMIN'))
         );
 
@@ -46,8 +46,8 @@ function createBaseTables(db) {
             status TEXT NOT NULL CHECK(status IN ('ACTIVE', 'EXPIRED', 'CANCELLED')),
             startDate DATETIME NOT NULL,
             endDate DATETIME NOT NULL,
-            createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
-            updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (userId) REFERENCES users(id) ON DELETE CASCADE
         );
 
@@ -60,8 +60,8 @@ function createBaseTables(db) {
             status TEXT NOT NULL CHECK(status IN ('PENDING', 'PAID', 'CANCELLED', 'EXPIRED')),
             yoomoneyLabel TEXT,
             paymentUrl TEXT,
-            createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
-            updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (userId) REFERENCES users(id) ON DELETE CASCADE
         );
 
@@ -106,7 +106,7 @@ function createBaseTables(db) {
 
         -- Таблица товаров
   CREATE TABLE IF NOT EXISTS products (
-    nm_id INTEGER PRIMARY KEY,
+    id INTEGER PRIMARY KEY,
     name TEXT NOT NULL,
     brand TEXT,
     brand_id INTEGER,
@@ -116,19 +116,18 @@ function createBaseTables(db) {
     feedbacks_count INTEGER DEFAULT 0,
     image_url TEXT,
     supplier TEXT,
-    supplier_id INTEGER,
     is_active BOOLEAN DEFAULT 1,
-    first_seen_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    last_updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (category_id) REFERENCES wb_categories(id) ON DELETE SET NULL -- Меняем на SET NULL
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (category_id) REFERENCES wb_categories(id) ON DELETE SET NULL 
 );
         -- Таблица истории цен
         CREATE TABLE IF NOT EXISTS price_history (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             product_id INTEGER NOT NULL,
             price INTEGER NOT NULL, -- цена в копейках
-            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (product_id) REFERENCES products(nm_id) ON DELETE CASCADE
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
         );
 
       
@@ -138,7 +137,7 @@ function createBaseTables(db) {
 CREATE TABLE IF NOT EXISTS user_product_subscriptions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id TEXT NOT NULL,
-    product_nm_id INTEGER NOT NULL,
+    product_id INTEGER NOT NULL,
     product_name TEXT NOT NULL,
     product_brand TEXT,
     product_image_url TEXT,
@@ -149,7 +148,7 @@ CREATE TABLE IF NOT EXISTS user_product_subscriptions (
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-    UNIQUE(user_id, product_nm_id)
+    UNIQUE(user_id, product_id)
 );
 
 
@@ -158,7 +157,7 @@ CREATE TABLE IF NOT EXISTS user_product_subscriptions (
         -- ИНДЕКСЫ ДЛЯ ОПТИМИЗАЦИИ --
 
 CREATE INDEX IF NOT EXISTS idx_user_product_subs_user_id ON user_product_subscriptions(user_id);
-CREATE INDEX IF NOT EXISTS idx_user_product_subs_product_id ON user_product_subscriptions(product_nm_id);
+CREATE INDEX IF NOT EXISTS idx_user_product_subs_product_id ON user_product_subscriptions(product_id);
 CREATE INDEX IF NOT EXISTS idx_user_product_subs_active ON user_product_subscriptions(is_active);
 
         -- Индексы из старого бота
@@ -166,7 +165,7 @@ CREATE INDEX IF NOT EXISTS idx_user_product_subs_active ON user_product_subscrip
         CREATE INDEX IF NOT EXISTS idx_subscriptions_endDate ON subscriptions(endDate);
         CREATE INDEX IF NOT EXISTS idx_orders_userId ON orders(userId);
         CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);
-        CREATE INDEX IF NOT EXISTS idx_orders_createdAt ON orders(createdAt);
+        CREATE INDEX IF NOT EXISTS idx_orders_created_at ON orders(created_at);
 
         -- Новые индексы для мониторинга
         CREATE INDEX IF NOT EXISTS idx_user_category_subs_user_id ON user_category_subscriptions(user_id);
@@ -178,7 +177,7 @@ CREATE INDEX IF NOT EXISTS idx_user_product_subs_active ON user_product_subscrip
         CREATE INDEX IF NOT EXISTS idx_products_brand ON products(brand);
         
         CREATE INDEX IF NOT EXISTS idx_price_history_product_id ON price_history(product_id);
-        CREATE INDEX IF NOT EXISTS idx_price_history_timestamp ON price_history(timestamp);
+        CREATE INDEX IF NOT EXISTS idx_price_history_created_at ON price_history(created_at);
         
         
         

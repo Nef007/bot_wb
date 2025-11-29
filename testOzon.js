@@ -1,9 +1,9 @@
 // test/ozonApiService.test.js
-import { OzonExactService } from './market/ozon/api.js';
+import { OzonApiService } from './market/ozon/api.js';
 
 class OzonApiTester {
     constructor() {
-        this.apiService = new OzonExactService();
+        this.apiService = new OzonApiService();
     }
 
     /**
@@ -14,6 +14,7 @@ class OzonApiTester {
 
         try {
             const categories = await this.apiService.fetchCategories();
+            console.log('🚀 ~ file: testOzon.js:17 ~ categories:', categories);
 
             console.log(`✅ Успешно получено категорий: ${categories.length}`);
 
@@ -56,9 +57,11 @@ class OzonApiTester {
             // Выводим первые 3 товара для примера
             console.log('\n📦 Примеры товаров:');
             products.slice(0, 3).forEach((product, index) => {
+                console.log('🚀 ~ file: testOzon.js:59 ~ product:', product);
+
                 console.log(`${index + 1}. ${product.name}`);
                 console.log(`   💰 Цена: ${product.current_price} руб.`);
-                console.log(`   🆔 ID: ${product.nm_id}`);
+                console.log(`   🆔 ID: ${product.id}`);
                 console.log(`   ⭐ Рейтинг: ${product.rating}`);
                 console.log(`   💬 Отзывы: ${product.feedbacks_count}`);
                 console.log(`   🏷️ Бренд: ${product.brand || 'Не указан'}`);
@@ -98,7 +101,7 @@ class OzonApiTester {
                 console.log('✅ Детальная информация о товаре:');
                 console.log(`   Название: ${productDetail.name || 'Не указано'}`);
                 console.log(`   Цена: ${productDetail.current_price || 0} руб.`);
-                console.log(`   ID: ${productDetail.nm_id || 'Не указан'}`);
+                console.log(`   ID: ${productDetail.id || 'Не указан'}`);
                 console.log(`   Рейтинг: ${productDetail.rating || 0}`);
                 console.log(`   Отзывы: ${productDetail.feedbacks_count || 0}`);
                 console.log(`   Бренд: ${productDetail.brand || 'Не указан'}`);

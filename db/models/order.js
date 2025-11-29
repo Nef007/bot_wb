@@ -16,7 +16,7 @@ const orderModel = {
         const stmt = db.prepare(`
             SELECT * FROM orders 
             WHERE userId = ? 
-            ORDER BY createdAt DESC 
+            ORDER BY created_at DESC 
             LIMIT ?
         `);
         return stmt.all(userId, limit);
@@ -32,7 +32,7 @@ const orderModel = {
     updateStatus: (orderNumber, status) => {
         const stmt = db.prepare(`
             UPDATE orders 
-            SET status = ?, updatedAt = CURRENT_TIMESTAMP 
+            SET status = ?, updated_at = CURRENT_TIMESTAMP 
             WHERE orderNumber = ?
         `);
         return stmt.run(status, orderNumber);
@@ -42,7 +42,7 @@ const orderModel = {
         const stmt = db.prepare(`
             DELETE FROM orders 
             WHERE status = 'PENDING' 
-            AND createdAt < datetime('now', '-3 days')
+            AND created_at < datetime('now', '-3 days')
         `);
         return stmt.run();
     },

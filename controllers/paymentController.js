@@ -69,7 +69,7 @@ export const paymentController = {
 
                 case 'not_found':
                     // Проверяем, не истек ли заказ
-                    const orderDate = new Date(order.createdAt);
+                    const orderDate = new Date(order.created_at);
                     const now = new Date();
                     const diffHours = (now - orderDate) / (1000 * 60 * 60);
 

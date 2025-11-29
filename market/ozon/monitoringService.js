@@ -122,7 +122,7 @@ export class OzonPriceMonitoringService extends BaseMonitoringService {
 
                 processedCount++;
             } catch (error) {
-                console.error(`❌ Ошибка обработки товара ${productData.nm_id}:`, error);
+                console.error(`❌ Ошибка обработки товара ${productData.id}:`, error);
             }
         }
 
@@ -135,7 +135,7 @@ export class OzonPriceMonitoringService extends BaseMonitoringService {
     async checkPriceChange(product, subscription) {
         try {
             // Получаем историю цен
-            const priceHistory = await priceHistoryModel.getLastTwoPrices(product.nm_id);
+            const priceHistory = await priceHistoryModel.getLastTwoPrices(product.id);
 
             if (priceHistory.length >= 2) {
                 const lastPrice = priceHistory[0].price;
@@ -151,9 +151,9 @@ export class OzonPriceMonitoringService extends BaseMonitoringService {
             }
 
             // Сохраняем текущую цену в историю
-            await priceHistoryModel.addPrice(product.nm_id, product.current_price);
+            await priceHistoryModel.addPrice(product.id, product.current_price);
         } catch (error) {
-            console.error(`❌ Ошибка проверки цены товара ${product.nm_id}:`, error);
+            console.error(`❌ Ошибка проверки цены товара ${product.id}:`, error);
         }
     }
 

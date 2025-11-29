@@ -168,20 +168,20 @@ export class WBPriceMonitoringService extends BaseMonitoringService {
 
             await productModel.upsert(product);
 
-            const lastPriceRecord = await priceHistoryModel.getLastPrice(product.nm_id);
+            const lastPriceRecord = await priceHistoryModel.getLastPrice(product.id);
             const lastPrice = lastPriceRecord?.price;
 
             if (lastPrice === null || product.current_price !== lastPrice) {
-                console.log(`💰 Изменение цены: ${product.nm_id} ${lastPrice || 'новый'} → ${product.current_price}`);
+                console.log(`💰 Изменение цены: ${product.id} ${lastPrice || 'новый'} → ${product.current_price}`);
 
-                await priceHistoryModel.create(product.nm_id, product.current_price);
+                await priceHistoryModel.create(product.id, product.current_price);
 
                 if (lastPrice !== null) {
                     await this.checkAndSendNotifications(product, lastPrice, subscriptions, category);
                 }
             }
         } catch (error) {
-            console.error(`❌ Ошибка обработки товара ${product.nm_id}:`, error.message);
+            console.error(`❌ Ошибка обработки товара ${product.id}:`, error.message);
         }
     }
 
@@ -189,7 +189,7 @@ export class WBPriceMonitoringService extends BaseMonitoringService {
      * Валидация товара
      */
     isValidProduct(product) {
-        return product.nm_id && product.current_price && product.current_price > 0;
+        return product.id && product.current_price && product.current_price > 0;
     }
 
     /**
@@ -241,7 +241,7 @@ export class WBPriceMonitoringService extends BaseMonitoringService {
         }
 
         return {
-            nm_id: productData.id,
+            id: productData.id,
             name: productData.name || 'Неизвестный товар',
             brand: productData.brand || '',
             brandId: productData.brandId || 0,
@@ -291,23 +291,23 @@ export class WBPriceMonitoringService extends BaseMonitoringService {
             return;
         }
 
-        console.log(`📨 Найдено ${subscriptionsToNotify.length} подписок для уведомления о товаре ${product.nm_id}`);
+        console.log(`📨 Найдено ${subscriptionsToNotify.length} подписок для уведомления о товаре ${product.id}`);
 
-        const lastTwoPrices = await priceHistoryModel.getLastTwoPrices(product.nm_id);
+        const lastTwoPrices = await priceHistoryModel.getLastTwoPrices(product.id);
         const [currentRecord, previousRecord] = lastTwoPrices || [];
 
         // Используем notificationManager вместо прямого доступа к telegramNotificationService
         subscriptionsToNotify.forEach((subscription) => {
             const alert = {
                 user_id: subscription.user_id,
-                product_id: product.nm_id,
+                product_id: product.id,
                 product_name: product.name,
                 brand: product.brand,
                 image_url: product.image_url,
                 old_price: oldPrice,
                 new_price: product.current_price,
-                old_time: previousRecord?.timestamp || new Date(),
-                new_time: currentRecord?.timestamp || new Date(),
+                old_time: previousRecord?.created_at || new Date(),
+                new_time: currentRecord?.created_at || new Date(),
                 percent_change: priceChange,
                 threshold: subscription.alert_threshold,
             };
@@ -356,10 +356,10 @@ export class WBPriceMonitoringService extends BaseMonitoringService {
             // Группируем по товарам для избежания дублирования запросов
             const productsMap = new Map();
             activeProductSubscriptions.forEach((subscription) => {
-                if (!productsMap.has(subscription.product_nm_id)) {
-                    productsMap.set(subscription.product_nm_id, []);
+                if (!productsMap.has(subscription.product_id)) {
+                    productsMap.set(subscription.product_id, []);
                 }
-                productsMap.get(subscription.product_nm_id).push(subscription);
+                productsMap.get(subscription.product_id).push(subscription);
             });
 
             console.log(`🎯 ${this.serviceName}: уникальных товаров для сканирования: ${productsMap.size}`);

@@ -426,7 +426,7 @@ ${subscription.last_scan_at ? dayjs(subscription.last_scan_at).format('DD.MM.YYY
                         ? subscription.product_name.substring(0, 35) + '...'
                         : subscription.product_name;
 
-                keyboard.text(`📦 ${shortName}`, `product_detail_from_my_${subscription.product_nm_id}`).row();
+                keyboard.text(`📦 ${shortName}`, `product_detail_from_my_${subscription.product_id}`).row();
             });
 
             // Кнопки действий

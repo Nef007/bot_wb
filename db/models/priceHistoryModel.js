@@ -24,7 +24,7 @@ export const priceHistoryModel = {
                 `
             SELECT * FROM price_history 
             WHERE product_id = ? 
-            ORDER BY timestamp DESC 
+            ORDER BY created_at DESC 
             LIMIT ?
         `
             )
@@ -73,7 +73,7 @@ export const priceHistoryModel = {
             // Отладка: покажем что возвращается
             // if (results.length > 0) {
             //     results.forEach((record, index) => {
-            //         console.log(`   ${index + 1}. ID: ${record.id}, Цена: ${record.price}, Время: ${record.timestamp}`);
+            //         console.log(`   ${index + 1}. ID: ${record.id}, Цена: ${record.price}, Время: ${record.created_at}`);
             //     });
             // }
 
@@ -94,9 +94,9 @@ export const priceHistoryModel = {
                 `
             SELECT ph.*, p.name as product_name, p.brand 
             FROM price_history ph
-            JOIN products p ON ph.product_id = p.nm_id
-            WHERE ph.timestamp > ?
-            ORDER BY ph.timestamp DESC
+            JOIN products p ON ph.product_id = p.id
+            WHERE ph.created_at > ?
+            ORDER BY ph.created_at DESC
         `
             )
             .all(date);

@@ -213,7 +213,7 @@ export class OzonApiService {
 
             const name = this.extractProductName(item);
             const product = {
-                nm_id: nmId,
+                id: nmId,
                 name: this.cleanProductName(name),
                 current_price: this.extractProductPrice(item),
                 rating: this.extractProductRating(item),
@@ -221,7 +221,7 @@ export class OzonApiService {
                 image_url: this.extractProductImage(item) || '',
                 url: item.action?.link ? `https://www.ozon.ru${item.action.link}` : '',
                 supplier: 'Ozon',
-                first_seen_at: new Date().toISOString(),
+                created_at: new Date().toISOString(),
             };
 
             console.log(`✅ Товар спарсен: ${product.name} (${product.current_price} руб.)`);
@@ -243,7 +243,7 @@ export class OzonApiService {
             const productDetail = {
                 name: '',
                 current_price: 0,
-                nm_id: '',
+                id: '',
                 rating: 0,
                 feedbacks_count: 0,
                 image_url: '',
@@ -252,7 +252,7 @@ export class OzonApiService {
             };
 
             // Базовая информация из SEO и pageInfo
-            productDetail.nm_id = pageData.pageInfo?.analyticsInfo?.sku?.toString() || '';
+            productDetail.id = pageData.pageInfo?.analyticsInfo?.sku?.toString() || '';
             if (pageData.seo?.title) {
                 productDetail.name = pageData.seo.title.split(' купить')[0].trim();
             }
@@ -544,7 +544,7 @@ export class OzonApiService {
     /**
      * Получение всех товаров из категории (с пагинацией)
      */
-    async fetchAllCategoryProducts(categoryUrl, maxPages = 10) {
+    async fetchAllCategoryProducts(categoryUrl, maxPages = 1) {
         const allProducts = [];
 
         for (let page = 1; page <= maxPages; page++) {
@@ -568,8 +568,8 @@ export class OzonApiService {
         console.log('🚨 Товары без цены:');
         productsWithoutPrice.forEach((product) => {
             console.log(`📱 ${product.name}`);
-            console.log(`🆔 ID: ${product.nm_id}`);
-            console.log(`🔗 URL: ${product.url || `https://www.ozon.ru/product/${product.nm_id}/`}`);
+            console.log(`🆔 ID: ${product.id}`);
+            console.log(`🔗 URL: ${product.url || `https://www.ozon.ru/product/${product.id}/`}`);
             console.log('─'.repeat(50));
         });
         return allProducts;

@@ -33,7 +33,7 @@ const subscriptionModel = {
     updateStatus: (userId, status) => {
         const stmt = db.prepare(`
             UPDATE subscriptions 
-            SET status = ?, updatedAt = CURRENT_TIMESTAMP 
+            SET status = ?, updated_at = CURRENT_TIMESTAMP 
             WHERE userId = ?
         `);
         return stmt.run(status, userId);

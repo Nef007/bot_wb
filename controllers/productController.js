@@ -316,7 +316,7 @@ function generatePriceList(priceHistory) {
 
     priceHistory.forEach((item, index) => {
         const price = Math.round(item.price);
-        const date = new Date(item.timestamp).toLocaleDateString('ru-RU', {
+        const date = new Date(item.created_at).toLocaleDateString('ru-RU', {
             day: '2-digit',
             month: '2-digit',
             year: 'numeric',
