@@ -6,6 +6,7 @@ export const productModel = {
      */
     // Временно замените метод upsert на эту версию в productModel
     upsert(productData) {
+        console.log('🚀 ~ file: productModel.js:9 ~ productData:', productData);
         const db = getDB();
 
         // Если category_id не указан или равен 0, используем системную категорию
@@ -21,8 +22,8 @@ export const productModel = {
                     `
                 INSERT INTO products 
                 (id, name, brand, brand_id, category_id, current_price, rating, 
-                 feedbacks_count, image_url, supplier, supplier_id)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 feedbacks_count, image_url, supplier)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             `
                 )
                 .run(
@@ -35,8 +36,7 @@ export const productModel = {
                     productData.rating || 0,
                     productData.feedbacks_count || 0,
                     productData.image_url,
-                    productData.supplier,
-                    productData.supplier_id
+                    productData.supplier
                 );
         }
 
@@ -45,7 +45,7 @@ export const productModel = {
             UPDATE products 
             SET name = ?, brand = ?, brand_id = ?, category_id = ?, 
                 current_price = ?, rating = ?, feedbacks_count = ?, 
-                image_url = ?, supplier = ?, supplier_id = ?, 
+                image_url = ?, supplier = ?,  
                 updated_at = CURRENT_TIMESTAMP
             WHERE id = ?
         `);
@@ -60,63 +60,8 @@ export const productModel = {
             productData.feedbacks_count || 0,
             productData.image_url,
             productData.supplier,
-            productData.supplier_id,
             productData.id
         );
-    },
-
-    upsertExplicit(productData) {
-        const db = getDB();
-
-        // Сначала пробуем обновить
-        const updateStmt = db.prepare(`
-        UPDATE products 
-        SET name = ?, brand = ?, brand_id = ?, category_id = ?, 
-            current_price = ?, rating = ?, feedbacks_count = ?, 
-            image_url = ?, supplier = ?, supplier_id = ?, 
-            updated_at = CURRENT_TIMESTAMP
-        WHERE id = ?
-    `);
-
-        const updateResult = updateStmt.run(
-            productData.name,
-            productData.brand,
-            productData.brandId,
-            productData.category_id,
-            productData.current_price,
-            productData.rating || 0,
-            productData.feedbacks_count || 0,
-            productData.image_url,
-            productData.supplier,
-            productData.supplier_id,
-            productData.id
-        );
-
-        // Если не обновили ни одной строки, значит товара нет - создаем
-        if (updateResult.changes === 0) {
-            const insertStmt = db.prepare(`
-            INSERT INTO products 
-            (id, name, brand, brand_id, category_id, current_price, rating, 
-             feedbacks_count, image_url, supplier, supplier_id, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-        `);
-
-            return insertStmt.run(
-                productData.id,
-                productData.name,
-                productData.brand,
-                productData.brandId,
-                productData.category_id,
-                productData.current_price,
-                productData.rating || 0,
-                productData.feedbacks_count || 0,
-                productData.image_url,
-                productData.supplier,
-                productData.supplier_id
-            );
-        }
-
-        return updateResult;
     },
 
     /**
@@ -156,14 +101,6 @@ export const productModel = {
             WHERE id = ?
         `
         ).run(newPrice, nmId);
-    },
-
-    /**
-     * Деактивировать товар
-     */
-    deactivate(nmId) {
-        const db = getDB();
-        db.prepare('UPDATE products SET is_active = 0 WHERE id = ?').run(nmId);
     },
 
     getPriceHistory: (productId, limit = 20) => {

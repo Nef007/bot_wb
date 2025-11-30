@@ -7,16 +7,12 @@ import { userController } from './controllers/userController.js';
 import mainRouter from './composer/index.js';
 import { YooMoneyService } from './services/yoomoneyService.js';
 import userModel from './db/models/user.js';
-import { wbCategoryModel } from './db/models/wbCategory.js'; // Добавляем импорт модели категорий
+import { wbCategorySyncService } from './market/wb/syncCategoryService.js';
 import { TelegramNotificationService } from './services/telegramNotificationService.js';
 import { notificationManager } from './services/notificationManager.js';
 import { monitoringOrchestrator } from './services/monitoringOrchestrator.js';
 
 const yooMoneyService = new YooMoneyService();
-
-// dayjs.extend(utc);
-// dayjs.extend(timezone);
-// dayjs.tz.setDefault('Europe/Moscow');
 
 // Настройка хранилища сессий (если используется FileAdapter)
 const storage = new FileAdapter({
@@ -91,7 +87,7 @@ async function start() {
                 console.log('✅ NotificationManager инициализирован');
 
                 // 3. Синхронизируем категории
-                await syncCategories();
+                await wbCategorySyncService.syncWithWB();
 
                 // 4. Инициализируем платежи
                 await yooMoneyService.initialize();
@@ -132,29 +128,5 @@ async function initializeAdmin() {
         }
     } catch (error) {
         console.error('Error initializing admin:', error);
-    }
-}
-
-/**
- * Синхронизация категорий с Wildberries при старте бота
- * (всегда обновляет категории)
- */
-async function syncCategories() {
-    try {
-        console.log('🔄 Загружаем категории с Wildberries...');
-
-        const categoriesCount = await wbCategoryModel.safeSyncWithWB();
-        console.log(`✅ Загружено ${categoriesCount} категорий`);
-    } catch (error) {
-        console.error('❌ Ошибка при синхронизации категорий:', error);
-        console.log('⚠️ Бот продолжит работу, но категории могут быть недоступны');
-
-        // Проверяем, есть ли хоть какие-то категории в базе
-        const hasCategories = await wbCategoryModel.hasCategories();
-        if (hasCategories) {
-            console.log('ℹ️ Используем существующие категории из базы');
-        } else {
-            console.log('❌ Категории полностью отсутствуют в базе');
-        }
     }
 }

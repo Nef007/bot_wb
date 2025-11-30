@@ -116,6 +116,7 @@ function createBaseTables(db) {
     feedbacks_count INTEGER DEFAULT 0,
     image_url TEXT,
     supplier TEXT,
+    market TEXT,
     is_active BOOLEAN DEFAULT 1,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,

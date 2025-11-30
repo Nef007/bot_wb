@@ -4,7 +4,7 @@ import { PriceUtils } from './utils/priceUtils.js';
 import { ImageUtils } from './utils/imageUtils.js';
 import { WildberriesApiService } from './api.js';
 import { userCategorySubscriptionModel } from '../../db/models/userCategorySubscriptionModel.js';
-import { wbCategoryModel } from '../../db/models/wbCategory.js';
+import { categoryModel } from '../../db/models/category.js';
 import { productModel } from '../../db/models/productModel.js';
 import { priceHistoryModel } from '../../db/models/priceHistoryModel.js';
 import { notificationManager } from '../../services/notificationManager.js';
@@ -112,7 +112,7 @@ export class WBPriceMonitoringService extends BaseMonitoringService {
         try {
             this.currentlyScanning.add(categoryId);
 
-            const category = await wbCategoryModel.findById(categoryId);
+            const category = await categoryModel.findById(categoryId);
             if (!category) {
                 console.log(`❌ Категория ${categoryId} не найдена`);
                 return;
@@ -204,7 +204,6 @@ export class WBPriceMonitoringService extends BaseMonitoringService {
                 console.log(`📄 Сканируем страницу ${page}/${actualPages}`);
 
                 const products = await this.wbApiService.fetchCategoryProducts(category, page);
-                //   console.log('🚀 ~ file: monitoringService.js:182 ~ products:', products);
 
                 if (products.length === 0) {
                     console.log(`ℹ️ На странице ${page} товаров не найдено, завершаем сканирование`);

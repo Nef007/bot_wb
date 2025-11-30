@@ -1,4 +1,4 @@
-// config/priceMonitoringConfig.js
+
 export const PriceMonitoringConfig = {
     SCAN: {
         DELAY: 3000,

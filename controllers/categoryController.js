@@ -1,5 +1,5 @@
 import { InlineKeyboard } from 'grammy';
-import { wbCategoryModel } from '../db/models/wbCategory.js';
+import { categoryModel } from '../db/models/category.js';
 import { userCategorySubscriptionModel } from '../db/models/userCategorySubscriptionModel.js';
 import dayjs from 'dayjs';
 import { userProductSubscriptionModel } from '../db/models/userProductSubscriptionModel.js';
@@ -10,11 +10,11 @@ export const categoryController = {
             const userId = String(ctx.from.id);
 
             // Проверяем, есть ли категории в базе
-            const hasCategories = await wbCategoryModel.hasCategories();
+            const hasCategories = await categoryModel.hasCategories();
             if (!hasCategories) {
                 console.log('🔄 Категорий нет в базе, загружаем...');
                 await ctx.reply('🔄 Загружаем категории с Wildberries...');
-                await wbCategoryModel.safeSyncWithWB();
+                await categoryModel.safeSyncWithWB();
             }
 
             let categories;
@@ -23,7 +23,7 @@ export const categoryController = {
 
             if (parentId === null) {
                 // Показываем категории первого уровня
-                categories = await wbCategoryModel.findByParentId(null);
+                categories = await categoryModel.findByParentId(null);
 
                 if (categories.length === 0) {
                     await ctx.reply('❌ Не удалось загрузить категории. Попробуйте позже.');
@@ -33,8 +33,8 @@ export const categoryController = {
                 menuHtml = `📂 <b>Категории Wildberries</b>\n\nВыберите категорию:`;
             } else {
                 // Показываем дочерние категории
-                categories = await wbCategoryModel.findByParentId(parentId);
-                const parentCategory = await wbCategoryModel.findById(parentId);
+                categories = await categoryModel.findByParentId(parentId);
+                const parentCategory = await categoryModel.findById(parentId);
 
                 if (!parentCategory) {
                     await ctx.reply('❌ Родительская категория не найдена');
@@ -100,7 +100,7 @@ export const categoryController = {
     showCategoryDetail: async (ctx, categoryId, messageIdToEdit = null) => {
         try {
             const userId = String(ctx.from.id);
-            const category = await wbCategoryModel.findById(categoryId);
+            const category = await categoryModel.findById(categoryId);
 
             if (!category) {
                 await ctx.reply('❌ Категория не найдена');
@@ -196,7 +196,7 @@ ${subscription.last_scan_at ? dayjs(subscription.last_scan_at).format('DD.MM.YYY
     subscribeToCategory: async (ctx, categoryId, messageIdToEdit = null) => {
         try {
             const userId = String(ctx.from.id);
-            const category = await wbCategoryModel.findById(categoryId);
+            const category = await categoryModel.findById(categoryId);
 
             if (!category) {
                 await ctx.answerCallbackQuery({ text: '❌ Категория не найдена' });
@@ -236,7 +236,7 @@ ${subscription.last_scan_at ? dayjs(subscription.last_scan_at).format('DD.MM.YYY
     showSubscriptionDetail: async (ctx, categoryId, messageIdToEdit = null, fromMySubscriptions = false) => {
         try {
             const userId = String(ctx.from.id);
-            const category = await wbCategoryModel.findById(categoryId);
+            const category = await categoryModel.findById(categoryId);
             const subscription = await userCategorySubscriptionModel.findByUserAndCategory(userId, categoryId);
 
             if (!category) {

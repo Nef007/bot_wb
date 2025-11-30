@@ -1,5 +1,6 @@
 import { InlineKeyboard } from 'grammy';
 import { productApiService } from '../services/productApiService.js';
+import { wildberriesApiService } from '../market/wb/api.js';
 import { userProductSubscriptionModel } from '../db/models/userProductSubscriptionModel.js';
 import { productModel } from '../db/models/productModel.js';
 import { priceHistoryModel } from '../db/models/priceHistoryModel.js';
@@ -64,7 +65,7 @@ export const productController = {
                 const nmId = productApiService.extractNmIdFromUrl(url);
                 console.log(`🔍 Извлечен nmId: ${nmId} из URL: ${url}`);
 
-                const productData = await productApiService.fetchProductByNmId(nmId);
+                const productData = await wildberriesApiService.fetchProductDetail(nmId);
 
                 if (!productData) {
                     await ctx.api.deleteMessage(ctx.chat.id, loadingMessage.message_id);
