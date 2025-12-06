@@ -1,23 +1,22 @@
-import { wildberriesApiService } from './api.js';
+import { ozonApiService } from './api.js';
 import { categoryModel } from '../../db/models/category.js';
 
 /**
  * Сервис для синхронизации категорий Wildberries с базой данных
  */
-export class WbCategorySyncService {
+export class OzonCategorySyncService {
     constructor() {
-        this.apiService = wildberriesApiService;
+        this.apiService = ozonApiService;
         this.categoryModel = categoryModel;
     }
 
     /**
      * Полная синхронизация категорий с Wildberries
      */
-    async syncWithWB() {
+    async syncWithOzon() {
         try {
-            console.log('🔄 Синхронизация категорий с Wildberries...');
+            console.log('🔄 Синхронизация категорий с OZON...');
             const categories = await this.apiService.fetchCategories();
-            console.log('🚀 ~ file: syncCategoryService.js:20 ~ categories:', categories);
 
             // Сохраняем текущее состояние подписок перед синхронизацией
             const activeCategoriesBeforeSync = await this.categoryModel.getActiveCategories();
@@ -32,8 +31,8 @@ export class WbCategorySyncService {
             return {
                 totalSynced: categories.length,
                 preservedActive: activeCategoriesBeforeSync.length,
-                //  inserted: syncResult.inserted,
-                //  updated: syncResult.updated,
+                inserted: syncResult.inserted,
+                updated: syncResult.updated,
                 timestamp: new Date().toISOString(),
             };
         } catch (error) {
@@ -79,11 +78,9 @@ export class WbCategorySyncService {
             name: category.name,
             full_name: category.full_name,
             url: category.url || '',
-            query: category.query || '',
             parent_id: category.parent_id || null,
-            catalog_type: 'wb',
+            catalog_type: 'ozon',
             has_children: category.has_children ? 1 : 0,
-            search_query: category.search_query || null,
         };
     }
 
@@ -122,9 +119,41 @@ export class WbCategorySyncService {
             throw error;
         }
     }
+
+    /**
+     * Принудительная синхронизация (игнорирует существующие данные)
+     */
+    async forceSyncWithWB() {
+        try {
+            console.log('🔄 Принудительная синхронизация категорий...');
+            const categories = await this.apiService.fetchCategories();
+
+            // Полностью очищаем и пересоздаем категории
+            await this.categoryModel.clearAllCategories();
+
+            // Вставляем свежие данные
+            let inserted = 0;
+            for (const category of categories) {
+                const categoryData = this.prepareCategoryData(category);
+                await this.categoryModel.insertCategory(categoryData, false); // без IGNORE
+                inserted++;
+            }
+
+            console.log(`✅ Принудительно синхронизировано ${categories.length} категорий`);
+            return {
+                totalSynced: categories.length,
+                inserted: inserted,
+                forced: true,
+                timestamp: new Date().toISOString(),
+            };
+        } catch (error) {
+            console.error('❌ Ошибка принудительной синхронизации:', error);
+            throw error;
+        }
+    }
 }
 
 // Создание и экспорт инстанса по умолчанию
-export const wbCategorySyncService = new WbCategorySyncService();
+export const ozonCategorySyncService = new OzonCategorySyncService();
 
-export default WbCategorySyncService;
+export default ozonCategorySyncService;

@@ -8,6 +8,7 @@ import mainRouter from './composer/index.js';
 import { YooMoneyService } from './services/yoomoneyService.js';
 import userModel from './db/models/user.js';
 import { wbCategorySyncService } from './market/wb/syncCategoryService.js';
+import { ozonCategorySyncService } from './market/ozon/syncCategoryService.js';
 import { TelegramNotificationService } from './services/telegramNotificationService.js';
 import { notificationManager } from './services/notificationManager.js';
 import { monitoringOrchestrator } from './services/monitoringOrchestrator.js';
@@ -91,7 +92,9 @@ async function start() {
                 console.log('✅ NotificationManager инициализирован');
 
                 // 3. Синхронизируем категории
-                await wbCategorySyncService.syncWithWB();
+                //          await wbCategorySyncService.syncWithWB();
+
+                await ozonCategorySyncService.syncWithOzon();
 
                 // 4. Инициализируем платежи
                 await yooMoneyService.initialize();

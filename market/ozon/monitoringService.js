@@ -1,6 +1,8 @@
 import { BaseMonitoringService } from '../baseMonitoringService.js';
+import { PriceMonitoringConfig } from './config.js';
 import { PriceUtils } from '../wb/utils/priceUtils.js';
 import { OzonApiService } from './api.js';
+import { categoryModel } from '../../db/models/category.js';
 import { ozonCategoryModel } from '../../db/models/ozonCategoryModel.js';
 import { userCategorySubscriptionModel } from '../../db/models/userCategorySubscriptionModel.js';
 import { productModel } from '../../db/models/productModel.js';
@@ -11,8 +13,9 @@ export class OzonPriceMonitoringService extends BaseMonitoringService {
     constructor() {
         super('Ozon');
         this.apiService = new OzonApiService();
-        this.isRunning = false;
-        this.scanDelay = 5000; // Задержка между запросами
+        this.currentlyScanning = new Set();
+        this.scanDelay = PriceMonitoringConfig.SCAN.DELAY;
+        this.maxPages = PriceMonitoringConfig.SCAN.MAX_PAGES;
     }
 
     /**
@@ -29,7 +32,7 @@ export class OzonPriceMonitoringService extends BaseMonitoringService {
             console.log(`🔄 Запуск мониторинга ${this.serviceName}...`);
 
             // Мониторинг категорий
-            //  await this.monitorCategories();
+            await this.monitorCategories();
 
             // Мониторинг отдельных товаров
             await this.monitorProducts();
@@ -69,7 +72,7 @@ export class OzonPriceMonitoringService extends BaseMonitoringService {
                     await this.scanAndProcessProduct(productNmId, subscriptions);
                     await this.delay(1000); // Задержка между запросами
                 } catch (error) {
-                    console.error(`❌ Ошибка обработки товара ${productNmId}:`, error.message);
+                    console.error(`❌ Ошибка обработки товара22 ${productNmId}:`, error.message);
                 }
             });
 
@@ -77,6 +80,135 @@ export class OzonPriceMonitoringService extends BaseMonitoringService {
         } catch (error) {
             console.error(`❌ Ошибка мониторинга товаров:`, error);
         }
+    }
+
+    async monitorCategories() {
+        try {
+            const activeSubscriptions = await userCategorySubscriptionModel.findAllActive('ozon');
+
+            if (activeSubscriptions.length === 0) {
+                console.log(`ℹ️ Нет активных подписок на категории для мониторинга ${this.serviceName}`);
+                return;
+            }
+
+            console.log(
+                `📊 ${this.serviceName}: найдено активных подписок на категории: ${activeSubscriptions.length}`
+            );
+
+            const categoriesMap = this.groupSubscriptionsByCategory(activeSubscriptions);
+            console.log(`🎯 ${this.serviceName}: уникальных категорий для сканирования: ${categoriesMap.size}`);
+
+            await this.processCategories(categoriesMap);
+        } catch (error) {
+            console.error(`❌ Ошибка мониторинга категорий:`, error);
+        }
+    }
+
+    groupSubscriptionsByCategory(subscriptions) {
+        return subscriptions.reduce((map, subscription) => {
+            const categoryId = subscription.category_id;
+            if (!map.has(categoryId)) {
+                map.set(categoryId, []);
+            }
+            map.get(categoryId).push(subscription);
+            return map;
+        }, new Map());
+    }
+
+    async processCategories(categoriesMap) {
+        const processingPromises = Array.from(categoriesMap.entries()).map(async ([categoryId, subscriptions]) => {
+            try {
+                await this.scanAndProcessCategory(categoryId, subscriptions);
+                await this.delay(this.scanDelay);
+            } catch (error) {
+                console.error(`❌ Ошибка обработки категории ${categoryId}:`, error.message);
+            }
+        });
+
+        await Promise.allSettled(processingPromises);
+    }
+
+    async scanAndProcessCategory(categoryId, subscriptions) {
+        if (this.currentlyScanning.has(categoryId)) {
+            console.log(`⏭️ Категория ${categoryId} уже сканируется, пропускаем`);
+            return;
+        }
+
+        try {
+            this.currentlyScanning.add(categoryId);
+
+            const category = await categoryModel.findById(categoryId);
+            if (!category) {
+                console.log(`❌ Категория ${categoryId} не найдена`);
+                return;
+            }
+
+            console.log(`\n🔍 Сканируем категорию: ${category.name} (ID: ${categoryId})`);
+            console.log(`👥 Подписчиков: ${subscriptions.length}`);
+
+            const scanPages = this.calculateScanPages(subscriptions);
+            const products = await this.scanCategoryProducts(category, scanPages);
+
+            console.log(`📦 Найдено товаров: ${products.length}`);
+
+            if (products.length === 0) {
+                console.log(`ℹ️ В категории ${category.name} не найдено товаров`);
+                return;
+            }
+
+            await this.processProductsBatch(products, subscriptions, category);
+            await this.updateSubscriptionsLastScan(subscriptions);
+        } finally {
+            this.currentlyScanning.delete(categoryId);
+        }
+    }
+
+    async updateSubscriptionsLastScan(subscriptions) {
+        const updatePromises = subscriptions.map((subscription) =>
+            userCategorySubscriptionModel.updateLastScan(subscription.id)
+        );
+
+        await Promise.allSettled(updatePromises);
+    }
+
+    calculateScanPages(subscriptions) {
+        const maxUserPages = Math.max(
+            ...subscriptions.map((s) => s.scan_pages || PriceMonitoringConfig.SCAN.DEFAULT_PAGES)
+        );
+        return Math.min(maxUserPages, this.maxPages);
+    }
+
+    async scanCategoryProducts(category, pagesToScan) {
+        const allProducts = [];
+        const actualPages = Math.min(pagesToScan, this.maxPages);
+
+        for (let page = 1; page <= actualPages; page++) {
+            try {
+                console.log(`📄 Сканируем страницу ${page}/${actualPages}`);
+
+                const products = await this.apiService.fetchAllCategoryProducts(category.url, page);
+
+                if (products.length === 0) {
+                    console.log(`ℹ️ На странице ${page} товаров не найдено, завершаем сканирование`);
+                    break;
+                }
+
+                console.log(`📊 Страница ${page}: ${products.length} товаров`);
+
+                // const normalizedProducts = products.map((product) => this.normalizeProductData(product, category.id));
+
+                allProducts.push(...products);
+
+                if (page < actualPages) {
+                    await this.delay(this.scanDelay);
+                }
+            } catch (error) {
+                console.error(`❌ Ошибка сканирования страницы ${page}:`, error.message);
+                break;
+            }
+        }
+
+        return allProducts;
     }
 
     async scanAndProcessProduct(productNmId, subscriptions) {
@@ -112,7 +244,7 @@ export class OzonPriceMonitoringService extends BaseMonitoringService {
                 return;
             }
 
-            await productModel.upsert(product);
+            await productModel.upsert({ ...product, marketplace: category.catalog_type });
 
             const lastPriceRecord = await priceHistoryModel.getLastPrice(product.id);
             const lastPrice = lastPriceRecord?.price;
@@ -127,7 +259,7 @@ export class OzonPriceMonitoringService extends BaseMonitoringService {
                 }
             }
         } catch (error) {
-            console.error(`❌ Ошибка обработки товара ${product.id}:`, error.message);
+            console.error(`❌ Ошибка обработки товара11 ${product.id}:`, error.message);
         }
     }
 
@@ -177,78 +309,12 @@ export class OzonPriceMonitoringService extends BaseMonitoringService {
     }
 
     /**
-     * Обработка одной подписки
-     */
-    async processSubscription(subscription) {
-        console.log(`🔍 Сканирование категории Ozon: ${subscription.category_name}`);
-
-        const category = await ozonCategoryModel.findById(subscription.category_id);
-        if (!category) {
-            console.error(`❌ Категория не найдена: ${subscription.category_id}`);
-            return;
-        }
-
-        let totalProducts = 0;
-
-        // Сканируем указанное количество страниц
-        for (let page = 1; page <= subscription.scan_pages; page++) {
-            try {
-                console.log(`📄 Сканирование страницы ${page} категории "${category.name}"`);
-
-                const products = await this.apiService.fetchCategoryProducts(category.url, page);
-
-                if (products.length === 0) {
-                    console.log(`⏹️ На странице ${page} товаров не найдено, завершаем сканирование`);
-                    break;
-                }
-
-                totalProducts += await this.processProductsBatch(products, subscription);
-
-                // Обновляем время последнего сканирования
-                await userCategorySubscriptionModel.updateLastScan(subscription.id);
-
-                console.log(`✅ Страница ${page} обработана, найдено ${products.length} товаров`);
-
-                // Задержка между страницами
-                if (page < subscription.scan_pages) {
-                    await this.delay(2000);
-                }
-            } catch (error) {
-                console.error(`❌ Ошибка сканирования страницы ${page}:`, error.message);
-                break;
-            }
-        }
-
-        console.log(`✅ Категория "${category.name}" обработана, всего товаров: ${totalProducts}`);
-    }
-
-    /**
      * Обработка батча товаров
      */
-    async processProductsBatch(products, subscription) {
-        let processedCount = 0;
+    async processProductsBatch(products, subscriptions, category) {
+        const processingPromises = products.map((product) => this.processProduct(product, subscriptions, category));
 
-        for (const productData of products) {
-            try {
-                // Добавляем category_id к данным товара
-                const productWithCategory = {
-                    ...productData,
-                    category_id: subscription.category_id,
-                };
-
-                // Сохраняем/обновляем товар
-                await productModel.upsert(productWithCategory);
-
-                // Проверяем изменение цены и отправляем уведомления
-                await this.checkPriceChange(productWithCategory, subscription);
-
-                processedCount++;
-            } catch (error) {
-                console.error(`❌ Ошибка обработки товара ${productData.id}:`, error);
-            }
-        }
-
-        return processedCount;
+        await Promise.allSettled(processingPromises);
     }
 
     /**

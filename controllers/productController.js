@@ -2,6 +2,7 @@ import { InlineKeyboard } from 'grammy';
 import { userProductSubscriptionModel } from '../db/models/userProductSubscriptionModel.js';
 import { productModel } from '../db/models/productModel.js';
 import { priceHistoryModel } from '../db/models/priceHistoryModel.js';
+import { formatLocalDateTime } from '../lib/main.js';
 
 export const productController = {
     /**
@@ -56,7 +57,7 @@ ${
 ⚡ <b>Порог уведомлений:</b> ${subscription.alert_threshold}%
 
 🕒 <b>Последняя проверка:</b>
-${subscription.last_scan_at ? new Date(subscription.last_scan_at).toLocaleString('ru-RU') : 'Еще не было'}
+${subscription.last_scan_at ? formatLocalDateTime(subscription.last_scan_at) : 'Еще не было'}
 
 🔗 <a href="${subscription.product_url}">Ссылка на товар</a>
         `;
@@ -225,13 +226,7 @@ function generatePriceList(priceHistory) {
 
     priceHistory.forEach((item, index) => {
         const price = Math.round(item.price);
-        const date = new Date(item.created_at).toLocaleDateString('ru-RU', {
-            day: '2-digit',
-            month: '2-digit',
-            year: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit',
-        });
+        const date = formatLocalDateTime(item.created_at);
 
         const formattedPrice = formatPrice(price);
 

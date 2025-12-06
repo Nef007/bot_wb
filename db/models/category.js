@@ -13,9 +13,9 @@ export const categoryModel = {
         const operation = ignoreConflict ? 'INSERT OR IGNORE' : 'INSERT';
 
         const stmt = db.prepare(`
-            ${operation} INTO wb_categories 
-            (id, name, full_name, url, query, shard, dest, parent_id, catalog_type, has_children, search_query, is_active, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, CURRENT_TIMESTAMP)
+            ${operation} INTO categories 
+            (id, name, full_name, url, query, parent_id, catalog_type, has_children, search_query, is_active, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, CURRENT_TIMESTAMP)
         `);
 
         return stmt.run(
@@ -24,8 +24,6 @@ export const categoryModel = {
             categoryData.full_name,
             categoryData.url,
             categoryData.query,
-            categoryData.shard,
-            categoryData.dest,
             categoryData.parent_id,
             categoryData.catalog_type,
             categoryData.has_children,
@@ -39,8 +37,8 @@ export const categoryModel = {
     updateCategory(categoryData) {
         const db = getDB();
         const stmt = db.prepare(`
-            UPDATE wb_categories 
-            SET name = ?, full_name = ?, url = ?, query = ?, shard = ?, dest = ?, 
+            UPDATE categories 
+            SET name = ?, full_name = ?, url = ?, query = ?, 
                 parent_id = ?, catalog_type = ?, has_children = ?, search_query = ?, updated_at = CURRENT_TIMESTAMP
             WHERE id = ?
         `);
@@ -50,8 +48,6 @@ export const categoryModel = {
             categoryData.full_name,
             categoryData.url,
             categoryData.query,
-            categoryData.shard,
-            categoryData.dest,
             categoryData.parent_id,
             categoryData.catalog_type,
             categoryData.has_children,
@@ -69,7 +65,7 @@ export const categoryModel = {
 
         const placeholders = categoryIds.map(() => '?').join(',');
         const stmt = db.prepare(`
-            UPDATE wb_categories 
+            UPDATE categories 
             SET is_active = ?, updated_at = CURRENT_TIMESTAMP 
             WHERE id IN (${placeholders})
         `);
@@ -82,7 +78,7 @@ export const categoryModel = {
      */
     clearAllCategories() {
         const db = getDB();
-        const stmt = db.prepare('DELETE FROM wb_categories');
+        const stmt = db.prepare('DELETE FROM categories');
         return stmt.run();
     },
 
@@ -95,7 +91,7 @@ export const categoryModel = {
      */
     getActiveCategories() {
         const db = getDB();
-        return db.prepare('SELECT id, is_active FROM wb_categories WHERE is_active = 1').all();
+        return db.prepare('SELECT id, is_active FROM categories WHERE is_active = 1').all();
     },
 
     /**
@@ -103,7 +99,7 @@ export const categoryModel = {
      */
     hasCategories() {
         const db = getDB();
-        const result = db.prepare('SELECT COUNT(*) as count FROM wb_categories').get();
+        const result = db.prepare('SELECT COUNT(*) as count FROM categories').get();
         return result.count > 0;
     },
 
@@ -112,7 +108,7 @@ export const categoryModel = {
      */
     getCategoriesCount() {
         const db = getDB();
-        const result = db.prepare('SELECT COUNT(*) as count FROM wb_categories').get();
+        const result = db.prepare('SELECT COUNT(*) as count FROM categories').get();
         return result.count;
     },
 
@@ -121,7 +117,7 @@ export const categoryModel = {
      */
     getActiveCategoriesCount() {
         const db = getDB();
-        const result = db.prepare('SELECT COUNT(*) as count FROM wb_categories WHERE is_active = 1').get();
+        const result = db.prepare('SELECT COUNT(*) as count FROM categories WHERE is_active = 1').get();
         return result.count;
     },
 
@@ -130,7 +126,7 @@ export const categoryModel = {
      */
     getLastSyncTime() {
         const db = getDB();
-        const result = db.prepare('SELECT MAX(updated_at) as last_sync FROM wb_categories').get();
+        const result = db.prepare('SELECT MAX(updated_at) as last_sync FROM categories').get();
         return result.last_sync;
     },
 
@@ -148,7 +144,7 @@ export const categoryModel = {
                 SUM(has_children) as with_children,
                 COUNT(DISTINCT parent_id) as unique_parents,
                 SUM(CASE WHEN search_query IS NOT NULL THEN 1 ELSE 0 END) as with_search_query
-            FROM wb_categories
+            FROM categories
         `
             )
             .get();
@@ -163,7 +159,7 @@ export const categoryModel = {
             return db
                 .prepare(
                     `
-                    SELECT * FROM wb_categories 
+                    SELECT * FROM categories 
                     WHERE parent_id IS NULL AND is_active = 1 
                     ORDER BY name
                 `
@@ -173,7 +169,7 @@ export const categoryModel = {
             return db
                 .prepare(
                     `
-                    SELECT * FROM wb_categories 
+                    SELECT * FROM categories 
                     WHERE parent_id = ? AND is_active = 1 
                     ORDER BY name
                 `
@@ -187,7 +183,7 @@ export const categoryModel = {
      */
     findById(id) {
         const db = getDB();
-        return db.prepare('SELECT * FROM wb_categories WHERE id = ?').get(id);
+        return db.prepare('SELECT * FROM categories WHERE id = ?').get(id);
     },
 
     /**
@@ -198,7 +194,7 @@ export const categoryModel = {
         return db
             .prepare(
                 `
-                SELECT * FROM wb_categories 
+                SELECT * FROM categories 
                 WHERE is_active = 1 
                 ORDER BY full_name
             `
@@ -214,7 +210,7 @@ export const categoryModel = {
         return db
             .prepare(
                 `
-                SELECT * FROM wb_categories 
+                SELECT * FROM categories 
                 WHERE (name LIKE ? OR full_name LIKE ?) AND is_active = 1 
                 ORDER BY full_name
             `

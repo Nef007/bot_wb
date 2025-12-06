@@ -4,17 +4,17 @@ export const userCategorySubscriptionModel = {
     /**
      * Создать подписку на категорию
      */
-    create(userId, categoryId, settings = {}) {
+    create(userId, categoryId, categoryType, settings = {}) {
         const db = getDB();
         const result = db
             .prepare(
                 `
             INSERT INTO user_category_subscriptions 
-            (user_id, category_id, alert_threshold, scan_pages) 
-            VALUES (?, ?, ?, ?)
+            (user_id, category_id, catalog_type, alert_threshold, scan_pages) 
+            VALUES (?, ?, ?, ?, ?)
         `
             )
-            .run(userId, categoryId, settings.alertThreshold || 5, settings.scanPages || 10);
+            .run(userId, categoryId, categoryType, settings.alertThreshold || 5, settings.scanPages || 10);
 
         console.log(`✅ Создана новая подписка ID: ${result.lastInsertRowid}`);
         return result.lastInsertRowid;
@@ -30,7 +30,7 @@ export const userCategorySubscriptionModel = {
                 `
             SELECT ucs.*, wc.name as category_name, wc.full_name 
             FROM user_category_subscriptions ucs
-            JOIN wb_categories wc ON ucs.category_id = wc.id
+            JOIN categories wc ON ucs.category_id = wc.id
             WHERE ucs.user_id = ? AND ucs.category_id = ?
         `
             )
@@ -47,7 +47,7 @@ export const userCategorySubscriptionModel = {
                 `
             SELECT ucs.*, wc.name as category_name, wc.full_name 
             FROM user_category_subscriptions ucs
-            JOIN wb_categories wc ON ucs.category_id = wc.id
+            JOIN categories wc ON ucs.category_id = wc.id
             WHERE ucs.user_id = ?
             ORDER BY wc.full_name
         `
@@ -125,20 +125,23 @@ export const userCategorySubscriptionModel = {
     /**
      * Получить все активные подписки (для мониторинга)
      */
-    findAllActive() {
+    findAllActive(catalog_type) {
         const db = getDB();
         return db
             .prepare(
                 `
-            SELECT ucs.*, u.id as user_id, u.username, wc.name as category_name, 
-                   wc.query, wc.dest, wc.catalog_type
+            SELECT ucs.*, u.id as user_id, u.username, 
+                   wc.name as category_name, wc.query, wc.catalog_type
             FROM user_category_subscriptions ucs
             JOIN users u ON ucs.user_id = u.id
-            JOIN wb_categories wc ON ucs.category_id = wc.id
+            JOIN categories wc ON ucs.category_id = wc.id 
+                AND ucs.catalog_type = wc.catalog_type  -- ДОБАВЬТЕ ЭТО УСЛОВИЕ
             WHERE u.status = 'ACTIVE'
+            AND ucs.is_active = 1
+            AND wc.catalog_type = ?  -- ФИЛЬТРАЦИЯ ПО CATALOG_TYPE
         `
             )
-            .all();
+            .all(catalog_type); // Передаем параметр
     },
 
     /**

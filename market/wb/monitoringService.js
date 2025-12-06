@@ -50,7 +50,7 @@ export class WBPriceMonitoringService extends BaseMonitoringService {
 
     async monitorCategories() {
         try {
-            const activeSubscriptions = await userCategorySubscriptionModel.findAllActive();
+            const activeSubscriptions = await userCategorySubscriptionModel.findAllActive('wb');
 
             if (activeSubscriptions.length === 0) {
                 console.log(`ℹ️ Нет активных подписок на категории для мониторинга ${this.serviceName}`);
@@ -251,6 +251,7 @@ export class WBPriceMonitoringService extends BaseMonitoringService {
             image_url: ImageUtils.getProductImageUrl(productData.id),
             supplier: productData.supplier || '',
             supplier_id: productData.supplierId || 0,
+            marketplace: 'wb',
         };
     }
 

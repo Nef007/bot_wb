@@ -1,7 +1,7 @@
 import { InlineKeyboard } from 'grammy';
 import { categoryModel } from '../db/models/category.js';
+import { formatLocalDateTime } from '../lib/main.js';
 import { userCategorySubscriptionModel } from '../db/models/userCategorySubscriptionModel.js';
-import dayjs from 'dayjs';
 import { userProductSubscriptionModel } from '../db/models/userProductSubscriptionModel.js';
 
 export const categoryController = {
@@ -126,7 +126,7 @@ export const categoryController = {
 
 
 🕒 <b>Последняя проверка:</b>
-${subscription.last_scan_at ? dayjs(subscription.last_scan_at).format('DD.MM.YYYY HH:mm') : 'Еще не было'}
+${subscription.last_scan_at ? formatLocalDateTime(subscription.last_scan_at) : 'Еще не было'}
                 `;
             } else {
                 menuHtml = `
@@ -213,10 +213,15 @@ ${subscription.last_scan_at ? dayjs(subscription.last_scan_at).format('DD.MM.YYY
             }
 
             // Создаем подписку с настройками по умолчанию
-            const subscriptionId = await userCategorySubscriptionModel.create(userId, categoryId, {
-                alertThreshold: 10,
-                scanPages: 10,
-            });
+            const subscriptionId = await userCategorySubscriptionModel.create(
+                userId,
+                categoryId,
+                category.catalog_type,
+                {
+                    alertThreshold: 10,
+                    scanPages: 10,
+                }
+            );
 
             console.log(`✅ Пользователь ${userId} подписан на категорию ${categoryId}`);
 
@@ -256,7 +261,7 @@ ${subscription.last_scan_at ? dayjs(subscription.last_scan_at).format('DD.MM.YYY
 
 
 🕒 <b>Последняя проверка:</b>
-${subscription.last_scan_at ? dayjs(subscription.last_scan_at).format('DD.MM.YYYY HH:mm') : 'Еще не было'}
+${subscription.last_scan_at ? formatLocalDateTime(subscription.last_scan_at) : 'Еще не было'}
             `;
 
             const keyboard = new InlineKeyboard()
@@ -356,6 +361,7 @@ ${subscription.last_scan_at ? dayjs(subscription.last_scan_at).format('DD.MM.YYY
         try {
             const userId = String(ctx.from.id);
             const categorySubscriptions = await userCategorySubscriptionModel.findByUserId(userId);
+
             const productSubscriptions = await userProductSubscriptionModel.findByUserId(userId);
 
             const totalSubscriptions = categorySubscriptions.length + productSubscriptions.length;
@@ -416,7 +422,12 @@ ${subscription.last_scan_at ? dayjs(subscription.last_scan_at).format('DD.MM.YYY
                         ? subscription.category_name.substring(0, 35) + '...'
                         : subscription.category_name;
 
-                keyboard.text(`📂 ${shortName}`, `subscription_detail_from_my_${subscription.category_id}`).row();
+                keyboard
+                    .text(
+                        `📂   ${(subscription.catalog_type = 'wb' ? '🟣' : '🔵')}  ${shortName}`,
+                        `subscription_detail_from_my_${subscription.category_id}`
+                    )
+                    .row();
             });
 
             // Добавляем товары
@@ -426,7 +437,12 @@ ${subscription.last_scan_at ? dayjs(subscription.last_scan_at).format('DD.MM.YYY
                         ? subscription.product_name.substring(0, 35) + '...'
                         : subscription.product_name;
 
-                keyboard.text(`📦 ${shortName}`, `product_detail_from_my_${subscription.product_id}`).row();
+                keyboard
+                    .text(
+                        `📦  ${(subscription.catalog_type = 'wb' ? '🟣' : '🔵')}  ${shortName}`,
+                        `product_detail_from_my_${subscription.product_id}`
+                    )
+                    .row();
             });
 
             // Кнопки действий

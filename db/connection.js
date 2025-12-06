@@ -67,28 +67,34 @@ function createBaseTables(db) {
 
        
 
- CREATE TABLE IF NOT EXISTS wb_categories (
-            id INTEGER PRIMARY KEY,
-            name TEXT NOT NULL,
-            full_name TEXT NOT NULL,
-            url TEXT,
-            query TEXT,
-            shard TEXT,
-            dest TEXT,
-            parent_id INTEGER,
-            catalog_type TEXT DEFAULT 'general',
-            has_children BOOLEAN DEFAULT 0,
-            is_active BOOLEAN DEFAULT 1,
-            search_query TEXT,
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (parent_id) REFERENCES wb_categories(id) ON DELETE SET NULL
+ CREATE TABLE IF NOT EXISTS categories (
+    id INTEGER NOT NULL,
+    catalog_type TEXT NOT NULL,
+    name TEXT NOT NULL,
+    full_name TEXT NOT NULL,
+    url TEXT,
+    query TEXT,
+    parent_id INTEGER,
+    has_children BOOLEAN DEFAULT 0,
+    is_active BOOLEAN DEFAULT 1,
+    search_query TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    
+    -- Составной первичный ключ
+    PRIMARY KEY (id, catalog_type),
+    
+    -- Внешний ключ тоже должен учитывать составной ключ
+    FOREIGN KEY (parent_id, catalog_type) 
+        REFERENCES categories(id, catalog_type) 
+        ON DELETE SET NULL
         );
 
         CREATE TABLE IF NOT EXISTS user_category_subscriptions (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id TEXT NOT NULL,
             category_id INTEGER NOT NULL,
+            catalog_type TEXT NOT NULL, 
             alert_threshold INTEGER DEFAULT 5,
             is_active BOOLEAN DEFAULT 1,
             last_scan_at DATETIME,
@@ -97,9 +103,18 @@ function createBaseTables(db) {
             max_products INTEGER DEFAULT 1000,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-            FOREIGN KEY (category_id) REFERENCES wb_categories(id) ON DELETE CASCADE,
-            UNIQUE(user_id, category_id)
+        
+             -- Внешний ключ на составной ключ categories
+            FOREIGN KEY (category_id, catalog_type) 
+            REFERENCES categories(id, catalog_type) 
+            ON DELETE CASCADE,
+    
+            -- Уникальность по user_id + составному ключу категории
+             UNIQUE(user_id, category_id, catalog_type)
+
+           
         );
 
   
@@ -110,7 +125,8 @@ function createBaseTables(db) {
     name TEXT NOT NULL,
     brand TEXT,
     brand_id INTEGER,
-    category_id INTEGER, -- Делаем nullable
+    category_id INTEGER, 
+    catalog_type TEXT NOT NULL, 
     current_price INTEGER NOT NULL,
     rating REAL DEFAULT 0,
     feedbacks_count INTEGER DEFAULT 0,
@@ -120,7 +136,10 @@ function createBaseTables(db) {
     is_active BOOLEAN DEFAULT 1,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (category_id) REFERENCES wb_categories(id) ON DELETE SET NULL 
+  
+            FOREIGN KEY (category_id, catalog_type) 
+            REFERENCES categories(id, catalog_type) 
+            ON DELETE SET NULL
 );
         -- Таблица истории цен
         CREATE TABLE IF NOT EXISTS price_history (
@@ -169,11 +188,11 @@ CREATE INDEX IF NOT EXISTS idx_user_product_subs_active ON user_product_subscrip
         CREATE INDEX IF NOT EXISTS idx_orders_created_at ON orders(created_at);
 
         -- Новые индексы для мониторинга
+     
         CREATE INDEX IF NOT EXISTS idx_user_category_subs_user_id ON user_category_subscriptions(user_id);
-        CREATE INDEX IF NOT EXISTS idx_user_category_subs_category_id ON user_category_subscriptions(category_id);
+        CREATE INDEX IF NOT EXISTS idx_user_category_subs_category_composite ON user_category_subscriptions(category_id, catalog_type);
         CREATE INDEX IF NOT EXISTS idx_user_category_subs_active ON user_category_subscriptions(is_active);
-        
-        CREATE INDEX IF NOT EXISTS idx_products_category_id ON products(category_id);
+
         CREATE INDEX IF NOT EXISTS idx_products_active ON products(is_active);
         CREATE INDEX IF NOT EXISTS idx_products_brand ON products(brand);
         
@@ -182,8 +201,8 @@ CREATE INDEX IF NOT EXISTS idx_user_product_subs_active ON user_product_subscrip
         
         
         
-        CREATE INDEX IF NOT EXISTS idx_wb_categories_parent_id ON wb_categories(parent_id);
-        CREATE INDEX IF NOT EXISTS idx_wb_categories_active ON wb_categories(is_active);
+        CREATE INDEX IF NOT EXISTS idx_categories_parent_id ON categories(parent_id);
+        CREATE INDEX IF NOT EXISTS idx_categories_active ON categories(is_active);
     `);
 }
 

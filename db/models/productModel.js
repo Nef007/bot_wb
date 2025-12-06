@@ -20,9 +20,9 @@ export const productModel = {
                 .prepare(
                     `
                 INSERT INTO products 
-                (id, name, brand,  category_id, current_price, rating, 
+                (id, name, brand,  category_id, catalog_type, current_price, rating, 
                  feedbacks_count, image_url,  marketplace)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             `
                 )
                 .run(
@@ -30,6 +30,7 @@ export const productModel = {
                     productData.name,
                     productData.brand || 'Неизвестно',
                     categoryId, // Используем обработанный category_id
+                    productData.marketplace, // ozon ? wb
                     productData.current_price,
                     productData.rating || 0,
                     productData.feedbacks_count || 0,

@@ -4,6 +4,7 @@ import orderModel from '../db/models/order.js';
 import { YooMoneyService } from '../services/yoomoneyService.js';
 import { paymentController } from './paymentController.js';
 import dayjs from 'dayjs';
+import { formatLocalDateTime } from '../lib/main.js';
 
 const yoomoneyService = new YooMoneyService();
 
@@ -185,9 +186,7 @@ export const subscriptionController = {
             : 'Еще не было';
         // Добавляем информацию о последней проверке
         if (paymentStatus && paymentStatus.timestamp) {
-            message += `🔍 <b>Последняя проверка:</b> ${dayjs(paymentStatus.timestamp).format(
-                'DD.MM.YYYY HH:mm:ss'
-            )}\n`;
+            message += `🔍 <b>Последняя проверка:</b> ${formatLocalDateTime(subscription.last_scan_at)}\n`;
         }
 
         if (isTrial) {

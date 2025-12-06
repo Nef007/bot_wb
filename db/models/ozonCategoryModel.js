@@ -17,7 +17,7 @@ export const ozonCategoryModel = {
             const categories = await apiService.fetchCategories();
 
             const insertStmt = db.prepare(`
-                INSERT OR IGNORE INTO wb_categories 
+                INSERT OR IGNORE INTO categories 
                 (id, name, full_name, url, parent_id, catalog_type, has_children, image, is_active)
                 VALUES (?, ?, ?, ?, ?, 'ozon', ?, ?, 1)
             `);
@@ -59,7 +59,7 @@ export const ozonCategoryModel = {
             } else {
                 console.log('📚 Категории Ozon уже есть в базе');
                 const count = db
-                    .prepare('SELECT COUNT(*) as count FROM wb_categories WHERE catalog_type = "ozon"')
+                    .prepare('SELECT COUNT(*) as count FROM categories WHERE catalog_type = "ozon"')
                     .get().count;
                 return count;
             }
@@ -73,7 +73,7 @@ export const ozonCategoryModel = {
      * Проверка наличия категорий Ozon
      */
     hasOzonCategories() {
-        const result = db.prepare('SELECT COUNT(*) as count FROM wb_categories WHERE catalog_type = "ozon"').get();
+        const result = db.prepare('SELECT COUNT(*) as count FROM categories WHERE catalog_type = "ozon"').get();
         return result.count > 0;
     },
 
@@ -81,7 +81,7 @@ export const ozonCategoryModel = {
      * Найти категорию по ID
      */
     findById(id) {
-        return db.prepare('SELECT * FROM wb_categories WHERE id = ?').get(id);
+        return db.prepare('SELECT * FROM categories WHERE id = ?').get(id);
     },
 
     /**
@@ -92,7 +92,7 @@ export const ozonCategoryModel = {
             return db
                 .prepare(
                     `
-                SELECT * FROM wb_categories 
+                SELECT * FROM categories 
                 WHERE parent_id IS NULL AND catalog_type = 'ozon' AND is_active = 1 
                 ORDER BY name
             `
@@ -102,7 +102,7 @@ export const ozonCategoryModel = {
             return db
                 .prepare(
                     `
-                SELECT * FROM wb_categories 
+                SELECT * FROM categories 
                 WHERE parent_id = ? AND catalog_type = 'ozon' AND is_active = 1 
                 ORDER BY name
             `
@@ -118,7 +118,7 @@ export const ozonCategoryModel = {
         return db
             .prepare(
                 `
-            SELECT * FROM wb_categories 
+            SELECT * FROM categories 
             WHERE catalog_type = 'ozon' AND is_active = 1 
             ORDER BY full_name
         `

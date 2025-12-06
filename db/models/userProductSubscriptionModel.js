@@ -53,7 +53,7 @@ export const userProductSubscriptionModel = {
         return db
             .prepare(
                 `
-            SELECT ups.*, p.current_price, p.rating, p.feedbacks_count, 
+            SELECT ups.*, p.current_price, p.catalog_type, p.rating, p.feedbacks_count, 
                    ph.price as last_price, ph.created_at as price_updated_at
             FROM user_product_subscriptions ups
             LEFT JOIN products p ON ups.product_id = p.id
