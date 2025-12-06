@@ -5,95 +5,15 @@ import { userCategorySubscriptionModel } from '../db/models/userCategorySubscrip
 import { userProductSubscriptionModel } from '../db/models/userProductSubscriptionModel.js';
 
 export const categoryController = {
-    showCategories: async (ctx, parentId = null, messageIdToEdit = null) => {
+    /**
+     * Запуск conversation для работы с категориями
+     */
+    startCategoryConversation: async (ctx) => {
         try {
-            const userId = String(ctx.from.id);
-
-            // Проверяем, есть ли категории в базе
-            const hasCategories = await categoryModel.hasCategories();
-            if (!hasCategories) {
-                console.log('🔄 Категорий нет в базе, загружаем...');
-                await ctx.reply('🔄 Загружаем категории с Wildberries...');
-                await categoryModel.safeSyncWithWB();
-            }
-
-            let categories;
-            let menuHtml;
-            let backButton = 'main_menu';
-
-            if (parentId === null) {
-                // Показываем категории первого уровня
-                categories = await categoryModel.findByParentId(null);
-
-                if (categories.length === 0) {
-                    await ctx.reply('❌ Не удалось загрузить категории. Попробуйте позже.');
-                    return;
-                }
-
-                menuHtml = `📂 <b>Категории Wildberries</b>\n\nВыберите категорию:`;
-            } else {
-                // Показываем дочерние категории
-                categories = await categoryModel.findByParentId(parentId);
-                const parentCategory = await categoryModel.findById(parentId);
-
-                if (!parentCategory) {
-                    await ctx.reply('❌ Родительская категория не найдена');
-                    return;
-                }
-
-                menuHtml = `📂 <b>${parentCategory.full_name}</b>\n\nВыберите подкатегорию:`;
-                backButton = parentCategory.parent_id ? `category_${parentCategory.parent_id}` : 'categories_menu';
-            }
-
-            const keyboard = new InlineKeyboard();
-
-            // Добавляем кнопки категорий с проверкой подписки
-            for (const category of categories) {
-                // Проверяем, подписан ли пользователь на эту категорию
-                const isSubscribed = await userCategorySubscriptionModel.isSubscribed(userId, category.id);
-
-                let buttonText;
-                let callbackData;
-
-                if (category.has_children) {
-                    // Для категорий с подкатегориями
-                    buttonText = isSubscribed ? `✅ 📁 ${category.name}` : `📁 ${category.name}`;
-                    callbackData = `category_${category.id}`;
-                } else {
-                    // Для конечных категорий
-                    buttonText = isSubscribed ? `✅ 📦 ${category.name}` : `📦 ${category.name}`;
-                    callbackData = isSubscribed ? `subscription_detail_${category.id}` : `subscribe_${category.id}`;
-                }
-
-                keyboard.text(buttonText, callbackData).row();
-            }
-
-            // Кнопка назад
-            keyboard.text('⬅️ Назад', backButton);
-
-            let finalMessage;
-            if (messageIdToEdit) {
-                finalMessage = await ctx.editMessageText(menuHtml, {
-                    reply_markup: keyboard,
-                    parse_mode: 'HTML',
-                });
-            } else {
-                finalMessage = await ctx.reply(menuHtml, {
-                    reply_markup: keyboard,
-                    parse_mode: 'HTML',
-                });
-            }
-
-            ctx.session.currentMenu = {
-                type: 'categories',
-                parentId: parentId,
-                messageId: finalMessage.message_id,
-            };
-
-            console.log(`✅ Показано ${categories.length} категорий`);
+            await ctx.conversation.enter('categoryConversation');
         } catch (e) {
-            console.error('ОШИБКА ПОЛУЧЕНИЯ КАТЕГОРИЙ', e);
-            await ctx.reply(`❌ Ошибка при загрузке категорий: ${e.message || e}`);
+            console.error('ОШИБКА ЗАПУСКА CATEGORY CONVERSATION', e);
+            await ctx.reply(`❌ Ошибка при запуске категорий: ${e.message || e}`);
         }
     },
 
@@ -236,7 +156,128 @@ ${subscription.last_scan_at ? formatLocalDateTime(subscription.last_scan_at) : '
     },
 
     /**
-     * Показать детали подписки (для перехода из "Мои подписки")
+     * Показать мои подписки (категории + товары) - без изменений
+     */
+    showMySubscriptions: async (ctx, messageIdToEdit = null) => {
+        // Оригинальный код остается без изменений
+        try {
+            const userId = String(ctx.from.id);
+            const categorySubscriptions = await userCategorySubscriptionModel.findByUserId(userId);
+            const productSubscriptions = await userProductSubscriptionModel.findByUserId(userId);
+            const totalSubscriptions = categorySubscriptions.length + productSubscriptions.length;
+
+            if (totalSubscriptions === 0) {
+                const menuHtml = `
+📋 <b>Мои подписки</b>
+
+У вас пока нет активных подписок.
+
+Вы можете:
+• Подписаться на категории в разделе "📂 Категории"
+• Добавить конкретный товар через "➕ Добавить товар"
+                `;
+
+                const keyboard = new InlineKeyboard()
+                    .text('📂 Категории', 'start_categories')
+                    .text('➕ Добавить товар', 'add_product')
+                    .text('⬅️ Назад', 'main_menu')
+                    .row();
+
+                let finalMessage;
+                if (messageIdToEdit) {
+                    finalMessage = await ctx.editMessageText(menuHtml, {
+                        reply_markup: keyboard,
+                        parse_mode: 'HTML',
+                    });
+                } else {
+                    finalMessage = await ctx.reply(menuHtml, {
+                        reply_markup: keyboard,
+                        parse_mode: 'HTML',
+                    });
+                }
+
+                ctx.session.currentMenu = {
+                    type: 'my_subscriptions',
+                    messageId: finalMessage.message_id,
+                };
+                return;
+            }
+
+            const menuHtml = `
+📋 <b>Мои подписки</b>
+
+Всего активных подписок: <b>${totalSubscriptions}</b>
+• 📂 Категорий: ${categorySubscriptions.length}
+• 📦 Товаров: ${productSubscriptions.length}
+
+<b>Выберите подписку для управления:</b>
+            `;
+
+            const keyboard = new InlineKeyboard();
+
+            // Добавляем категории
+            categorySubscriptions.forEach((subscription) => {
+                const shortName =
+                    subscription.category_name.length > 35
+                        ? subscription.category_name.substring(0, 35) + '...'
+                        : subscription.category_name;
+
+                keyboard
+                    .text(
+                        `📂 ${subscription.catalog_type === 'wb' ? '🟣' : '🔵'} ${shortName}`,
+                        `subscription_detail_from_my_${subscription.category_id}`
+                    )
+                    .row();
+            });
+
+            // Добавляем товары
+            productSubscriptions.forEach((subscription) => {
+                const shortName =
+                    subscription.product_name.length > 35
+                        ? subscription.product_name.substring(0, 35) + '...'
+                        : subscription.product_name;
+
+                keyboard
+                    .text(
+                        `📦 ${subscription.catalog_type === 'wb' ? '🟣' : '🔵'} ${shortName}`,
+                        `product_detail_from_my_${subscription.product_id}`
+                    )
+                    .row();
+            });
+
+            // Кнопки действий
+            keyboard
+                .text('📂 Добавить категории', 'start_categories')
+                .text('➕ Добавить товар', 'add_product')
+                .row()
+                .text('⬅️ Назад', 'main_menu')
+                .row();
+
+            let finalMessage;
+            if (messageIdToEdit) {
+                finalMessage = await ctx.editMessageText(menuHtml, {
+                    reply_markup: keyboard,
+                    parse_mode: 'HTML',
+                });
+            } else {
+                finalMessage = await ctx.reply(menuHtml, {
+                    reply_markup: keyboard,
+                    parse_mode: 'HTML',
+                });
+            }
+
+            ctx.session.currentMenu = {
+                type: 'my_subscriptions',
+                messageId: finalMessage.message_id,
+            };
+        } catch (e) {
+            console.error('ОШИБКА ПОКАЗА МОИХ ПОДПИСОК', e);
+            await ctx.reply(`❌ Ошибка при загрузке подписок: ${e.message || e}`);
+        }
+    },
+
+    /**
+     * Показать детали подписки из "Мои подписки"
      */
     showSubscriptionDetail: async (ctx, categoryId, messageIdToEdit = null, fromMySubscriptions = false) => {
         try {
@@ -250,15 +291,17 @@ ${subscription.last_scan_at ? formatLocalDateTime(subscription.last_scan_at) : '
             }
 
             const currentThreshold = subscription.alert_threshold;
+            const marketName = subscription.catalog_type === 'wb' ? 'Wildberries' : 'Ozon';
+            const marketIcon = subscription.catalog_type === 'wb' ? '📦' : '🚀';
 
             const menuHtml = `
-📦 <b>${category.full_name}</b>
+${marketIcon} <b>${category.full_name}</b>
 
 ✅ <b>Вы подписаны на отслеживание</b>
 
 📊 <b>Текущие настройки:</b>
 • Порог уведомлений: ${subscription.alert_threshold}%
-
+• Количество страниц: ${subscription.scan_pages}
 
 🕒 <b>Последняя проверка:</b>
 ${subscription.last_scan_at ? formatLocalDateTime(subscription.last_scan_at) : 'Еще не было'}
@@ -278,17 +321,14 @@ ${subscription.last_scan_at ? formatLocalDateTime(subscription.last_scan_at) : '
                 .text('❌ Отписаться', `unsubscribe_${categoryId}`)
                 .row();
 
-            // Определяем куда ведет кнопка "Назад" в зависимости от источника
+            // Определяем куда ведет кнопка "Назад"
             let backButton;
             if (fromMySubscriptions) {
-                // Если пришли из "Мои подписки", то возвращаемся туда
                 backButton = 'my_subscriptions';
             } else if (category.parent_id) {
-                // Если пришли из дерева категорий, возвращаемся к родительской категории
                 backButton = `category_${category.parent_id}`;
             } else {
-                // Иначе возвращаемся к списку категорий
-                backButton = 'categories_menu';
+                backButton = 'start_categories';
             }
 
             keyboard.text('⬅️ Назад', backButton);
@@ -424,7 +464,7 @@ ${subscription.last_scan_at ? formatLocalDateTime(subscription.last_scan_at) : '
 
                 keyboard
                     .text(
-                        `📂   ${(subscription.catalog_type = 'wb' ? '🟣' : '🔵')}  ${shortName}`,
+                        `📂   ${subscription.catalog_type === 'wb' ? '🟣' : '🔵'}  ${shortName}`,
                         `subscription_detail_from_my_${subscription.category_id}`
                     )
                     .row();
@@ -439,7 +479,7 @@ ${subscription.last_scan_at ? formatLocalDateTime(subscription.last_scan_at) : '
 
                 keyboard
                     .text(
-                        `📦  ${(subscription.catalog_type = 'wb' ? '🟣' : '🔵')}  ${shortName}`,
+                        `📦  ${subscription.catalog_type === 'wb' ? '🟣' : '🔵'}  ${shortName}`,
                         `product_detail_from_my_${subscription.product_id}`
                     )
                     .row();

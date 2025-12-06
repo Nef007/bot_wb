@@ -7,14 +7,18 @@ export function createCategoryComposer() {
 
     // Меню категорий
     composer.callbackQuery('categories_menu', async (ctx) => {
-        await categoryController.showCategories(ctx, null, ctx.callbackQuery.message.message_id);
+        await categoryController.startCategoryConversation(ctx, null, ctx.callbackQuery.message.message_id);
         await ctx.answerCallbackQuery();
     });
 
     // Навигация по категориям
     composer.callbackQuery(/^category_(\d+)$/, async (ctx) => {
         const [, categoryId] = ctx.match;
-        await categoryController.showCategories(ctx, parseInt(categoryId), ctx.callbackQuery.message.message_id);
+        await categoryController.startCategoryConversation(
+            ctx,
+            parseInt(categoryId),
+            ctx.callbackQuery.message.message_id
+        );
         await ctx.answerCallbackQuery();
     });
 

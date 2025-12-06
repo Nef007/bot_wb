@@ -1,5 +1,9 @@
 import { InlineKeyboard } from 'grammy';
 import { menuController } from '../controllers/menuController.js';
+import { categoryModel } from '../db/models/category.js';
+
+import { wbCategorySyncService } from '../market/wb/syncCategoryService.js';
+import { userCategorySubscriptionModel } from '../db/models/userCategorySubscriptionModel.js';
 
 /**
  * Conversation для выбора магазина и отображения категорий
@@ -20,14 +24,17 @@ async function categoryConversation(conversation, ctx) {
             }
 
             // Показываем выбор маркетплейса
-            const marketMessage = await ctx.reply('🏪 <b>Выбор магазина</b>\n\nВыберите магазин для просмотра категорий:', {
-                reply_markup: new InlineKeyboard()
-                    .text('📦 Wildberries', 'select_wb_categories')
-                    .text('🚀 Ozon', 'select_ozon_categories')
-                    .row()
-                    .text('❌ Отмена', 'cancel_categories'),
-                parse_mode: 'HTML',
-            });
+            const marketMessage = await ctx.reply(
+                '🏪 <b>Выбор магазина</b>\n\nВыберите магазин для просмотра категорий:',
+                {
+                    reply_markup: new InlineKeyboard()
+                        .text('📦 Wildberries', 'select_wb_categories')
+                        .text('🚀 Ozon', 'select_ozon_categories')
+                        .row()
+                        .text('❌ Отмена', 'cancel_categories'),
+                    parse_mode: 'HTML',
+                }
+            );
 
             messageIdToEdit = marketMessage.message_id;
 
@@ -37,7 +44,11 @@ async function categoryConversation(conversation, ctx) {
                 marketChoiceCtx = await conversation.wait();
                 const data = marketChoiceCtx.callbackQuery?.data;
 
-                if (data === 'select_wb_categories' || data === 'select_ozon_categories' || data === 'cancel_categories') {
+                if (
+                    data === 'select_wb_categories' ||
+                    data === 'select_ozon_categories' ||
+                    data === 'cancel_categories'
+                ) {
                     break;
                 } else {
                     await ctx.reply('❌ Пожалуйста, выберите один из предложенных магазинов или нажмите "Отмена".');
@@ -61,12 +72,6 @@ async function categoryConversation(conversation, ctx) {
             await marketChoiceCtx.answerCallbackQuery({ text: `✅ Выбран ${marketName}` });
         }
 
-        // Шаг 2: Загружаем категории для выбранного магазина
-        const categoryModel = conversation.external(() => require('../db/models/category.js').categoryModel);
-        const userCategorySubscriptionModel = conversation.external(() => require('../db/models/userCategorySubscriptionModel.js').userCategorySubscriptionModel);
-        const userProductSubscriptionModel = conversation.external(() => require('../db/models/userProductSubscriptionModel.js').userProductSubscriptionModel);
-        const formatLocalDateTime = conversation.external(() => require('../lib/main.js').formatLocalDateTime);
-
         const userId = String(ctx.from.id);
 
         // Проверяем, есть ли категории в базе для выбранного магазина
@@ -74,9 +79,9 @@ async function categoryConversation(conversation, ctx) {
         if (!hasCategories) {
             await ctx.editMessageText('🔄 Загружаем категории...', {
                 message_id: messageIdToEdit,
-                chat_id: ctx.chat.id
+                chat_id: ctx.chat.id,
             });
-            await categoryModel.safeSyncWithWB(marketType);
+            await wbCategorySyncService.safeSyncWithWB(marketType);
         }
 
         // Основной цикл навигации по категориям
@@ -92,19 +97,22 @@ async function categoryConversation(conversation, ctx) {
 
                 if (categories.length === 0) {
                     const marketName = marketType === 'wb' ? 'Wildberries' : 'Ozon';
-                    await ctx.editMessageText(`❌ Не удалось загрузить категории для ${marketName}. Попробуйте позже.`, {
-                        message_id: messageIdToEdit,
-                        chat_id: ctx.chat.id,
-                        reply_markup: new InlineKeyboard()
-                            .text('🔄 Попробовать снова', 'retry_categories')
-                            .text('📋 Главное меню', 'main_menu'),
-                    });
+                    await ctx.editMessageText(
+                        `❌ Не удалось загрузить категории для ${marketName}. Попробуйте позже.`,
+                        {
+                            message_id: messageIdToEdit,
+                            chat_id: ctx.chat.id,
+                            reply_markup: new InlineKeyboard()
+                                .text('🔄 Попробовать снова', 'retry_categories')
+                                .text('📋 Главное меню', 'main_menu'),
+                        }
+                    );
 
                     // Ждем решения пользователя
                     const retryCtx = await conversation.wait();
                     if (retryCtx.callbackQuery?.data === 'retry_categories') {
                         await retryCtx.answerCallbackQuery({ text: '🔄 Обновляем...' });
-                        await categoryModel.safeSyncWithWB(marketType);
+                        await wbCategorySyncService.safeSyncWithWB(marketType);
                         continue;
                     } else {
                         await menuController.getMenu(ctx);
@@ -160,9 +168,8 @@ async function categoryConversation(conversation, ctx) {
             if (currentParentId !== null) {
                 keyboard.text('⬅️ Назад', backButton).row();
             }
-            
-            keyboard.text('🔄 Сменить магазин', 'market_selection')
-                   .text('📋 Главное меню', 'main_menu');
+
+            keyboard.text('🔄 Сменить магазин', 'market_selection').text('📋 Главное меню', 'main_menu');
 
             // Обновляем сообщение
             await ctx.editMessageText(menuHtml, {
@@ -231,8 +238,6 @@ async function categoryConversation(conversation, ctx) {
  */
 async function handleSubscribe(ctx, conversation, categoryId, marketType, messageIdToEdit) {
     const userId = String(ctx.from.id);
-    const categoryModel = conversation.external(() => require('../db/models/category.js').categoryModel);
-    const userCategorySubscriptionModel = conversation.external(() => require('../db/models/userCategorySubscriptionModel.js').userCategorySubscriptionModel);
 
     const category = await categoryModel.findById(categoryId);
     if (!category) {
@@ -249,15 +254,10 @@ async function handleSubscribe(ctx, conversation, categoryId, marketType, messag
     }
 
     // Создаем подписку с настройками по умолчанию
-    await userCategorySubscriptionModel.create(
-        userId,
-        categoryId,
-        marketType,
-        {
-            alertThreshold: 10,
-            scanPages: 10,
-        }
-    );
+    await userCategorySubscriptionModel.create(userId, categoryId, marketType, {
+        alertThreshold: 10,
+        scanPages: 10,
+    });
 
     console.log(`✅ Пользователь ${userId} подписан на категорию ${categoryId} (${marketType})`);
     await ctx.answerCallbackQuery({ text: '✅ Подписка оформлена!' });
@@ -269,11 +269,15 @@ async function handleSubscribe(ctx, conversation, categoryId, marketType, messag
 /**
  * Показать детали подписки
  */
-async function showSubscriptionDetail(ctx, conversation, categoryId, marketType, messageIdToEdit, fromMySubscriptions = false) {
+async function showSubscriptionDetail(
+    ctx,
+    conversation,
+    categoryId,
+    marketType,
+    messageIdToEdit,
+    fromMySubscriptions = false
+) {
     const userId = String(ctx.from.id);
-    const categoryModel = conversation.external(() => require('../db/models/category.js').categoryModel);
-    const userCategorySubscriptionModel = conversation.external(() => require('../db/models/userCategorySubscriptionModel.js').userCategorySubscriptionModel);
-    const formatLocalDateTime = conversation.external(() => require('../lib/main.js').formatLocalDateTime);
 
     const category = await categoryModel.findById(categoryId);
     const subscription = await userCategorySubscriptionModel.findByUserAndCategory(userId, categoryId);
@@ -339,7 +343,6 @@ ${subscription.last_scan_at ? formatLocalDateTime(subscription.last_scan_at) : '
  */
 async function handleSetThreshold(ctx, conversation, categoryId, threshold, marketType, messageIdToEdit) {
     const userId = String(ctx.from.id);
-    const userCategorySubscriptionModel = conversation.external(() => require('../db/models/userCategorySubscriptionModel.js').userCategorySubscriptionModel);
 
     const subscription = await userCategorySubscriptionModel.findByUserAndCategory(userId, categoryId);
     if (!subscription) {
@@ -362,7 +365,6 @@ async function handleSetThreshold(ctx, conversation, categoryId, threshold, mark
  */
 async function handleUnsubscribe(ctx, conversation, categoryId, marketType, messageIdToEdit) {
     const userId = String(ctx.from.id);
-    const userCategorySubscriptionModel = conversation.external(() => require('../db/models/userCategorySubscriptionModel.js').userCategorySubscriptionModel);
 
     const subscription = await userCategorySubscriptionModel.findByUserAndCategory(userId, categoryId);
     if (!subscription) {
@@ -385,8 +387,6 @@ async function handleUnsubscribe(ctx, conversation, categoryId, marketType, mess
  */
 async function showCategoriesList(ctx, conversation, parentId, marketType, messageIdToEdit) {
     const userId = String(ctx.from.id);
-    const categoryModel = conversation.external(() => require('../db/models/category.js').categoryModel);
-    const userCategorySubscriptionModel = conversation.external(() => require('../db/models/userCategorySubscriptionModel.js').userCategorySubscriptionModel);
 
     let categories;
     let menuHtml;
@@ -400,12 +400,12 @@ async function showCategoriesList(ctx, conversation, parentId, marketType, messa
     } else {
         categories = await categoryModel.findByParentId(parentId, marketType);
         const parentCategory = await categoryModel.findById(parentId);
-        
+
         if (!parentCategory) {
             await ctx.answerCallbackQuery({ text: '❌ Родительская категория не найдена' });
             return;
         }
-        
+
         menuHtml = `📂 <b>${parentCategory.full_name}</b>\n\nВыберите подкатегорию:`;
         backButton = parentCategory.parent_id ? `category_${parentCategory.parent_id}` : 'market_selection';
     }
@@ -429,9 +429,7 @@ async function showCategoriesList(ctx, conversation, parentId, marketType, messa
         keyboard.text(buttonText, callbackData).row();
     }
 
-    keyboard.text('⬅️ Назад', backButton)
-           .text('🔄 Сменить магазин', 'market_selection')
-           .row();
+    keyboard.text('⬅️ Назад', backButton).text('🔄 Сменить магазин', 'market_selection').row();
 
     await ctx.editMessageText(menuHtml, {
         message_id: messageIdToEdit,

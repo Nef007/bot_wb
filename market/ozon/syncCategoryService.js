@@ -55,6 +55,7 @@ export class OzonCategorySyncService {
             const insertResult = await this.categoryModel.insertCategory(categoryData);
 
             if (insertResult.changes === 0) {
+                console.log('🚀 ~ file: syncCategoryService.js:56 ~ categoryData:', categoryData);
                 // Если категория уже существует, обновляем ее
                 await this.categoryModel.updateCategory(categoryData);
                 updated++;

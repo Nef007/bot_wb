@@ -39,8 +39,8 @@ export const categoryModel = {
         const stmt = db.prepare(`
             UPDATE categories 
             SET name = ?, full_name = ?, url = ?, query = ?, 
-                parent_id = ?, catalog_type = ?, has_children = ?, search_query = ?, updated_at = CURRENT_TIMESTAMP
-            WHERE id = ?
+                parent_id = ?,  has_children = ?, search_query = ?, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ? and catalog_type = ?
         `);
 
         return stmt.run(
@@ -49,10 +49,10 @@ export const categoryModel = {
             categoryData.url,
             categoryData.query,
             categoryData.parent_id,
-            categoryData.catalog_type,
             categoryData.has_children,
             categoryData.search_query,
-            categoryData.id
+            categoryData.id,
+            categoryData.catalog_type
         );
     },
 
@@ -153,28 +153,28 @@ export const categoryModel = {
     /**
      * Получить категории по parent_id
      */
-    findByParentId(parentId) {
+    findByParentId(parentId, catalog_type) {
         const db = getDB();
         if (parentId === null) {
             return db
                 .prepare(
                     `
                     SELECT * FROM categories 
-                    WHERE parent_id IS NULL AND is_active = 1 
+                    WHERE parent_id IS NULL AND is_active = 1 AND catalog_type = ?
                     ORDER BY name
                 `
                 )
-                .all();
+                .all(catalog_type);
         } else {
             return db
                 .prepare(
                     `
                     SELECT * FROM categories 
-                    WHERE parent_id = ? AND is_active = 1 
+                    WHERE parent_id = ? AND is_active = 1 AND catalog_type = ?
                     ORDER BY name
                 `
                 )
-                .all(parentId);
+                .all(parentId, catalog_type);
         }
     },
 

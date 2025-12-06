@@ -14,6 +14,7 @@ import { notificationManager } from './services/notificationManager.js';
 import { monitoringOrchestrator } from './services/monitoringOrchestrator.js';
 
 import addProductConversation from './conversations/addProduct.js';
+import categoryConversation from './conversations/showCategory.js';
 
 const yooMoneyService = new YooMoneyService();
 
@@ -36,6 +37,7 @@ async function start() {
     bot.use(conversations());
 
     bot.use(createConversation(addProductConversation, 'addProductConversation'));
+    bot.use(createConversation(categoryConversation, 'categoryConversation'));
 
     mainRouter.forEach((createComposerFunc) => bot.use(createComposerFunc())); // Возвращаем использование mainRouter
 
@@ -92,7 +94,7 @@ async function start() {
                 console.log('✅ NotificationManager инициализирован');
 
                 // 3. Синхронизируем категории
-                //          await wbCategorySyncService.syncWithWB();
+                await wbCategorySyncService.syncWithWB();
 
                 await ozonCategorySyncService.syncWithOzon();
 
