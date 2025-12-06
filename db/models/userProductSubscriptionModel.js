@@ -118,7 +118,7 @@ export const userProductSubscriptionModel = {
     /**
      * Получить все активные подписки на товары (для мониторинга)
      */
-    findAllActive() {
+    findAllActive(marketplace) {
         const db = getDB();
         return db
             .prepare(
@@ -126,10 +126,11 @@ export const userProductSubscriptionModel = {
             SELECT ups.*, u.id as user_id, u.username
             FROM user_product_subscriptions ups
             JOIN users u ON ups.user_id = u.id
-            WHERE ups.is_active = 1 AND u.status = 'ACTIVE'
+            JOIN products p ON ups.product_id = p.id
+            WHERE ups.is_active = 1 AND u.status = 'ACTIVE' AND p.marketplace = ?
         `
             )
-            .all();
+            .all(marketplace);
     },
 
     /**

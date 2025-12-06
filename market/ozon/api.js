@@ -148,9 +148,9 @@ export class OzonApiService {
      */
     async fetchProductDetail(productUrl) {
         try {
-            const fullUrl = `https://www.ozon.ru${productUrl}`;
+            // const fullUrl = `https://www.ozon.ru${productUrl}`;
             const apiUrl = 'https://www.ozon.ru/api/entrypoint-api.bx/page/json/v2';
-            const encodedUrl = encodeURIComponent(fullUrl);
+            const encodedUrl = encodeURIComponent(productUrl);
 
             console.log('📡 Запрос детальной информации о товаре:', productUrl);
 
@@ -756,7 +756,7 @@ export class OzonApiService {
                 try {
                     const widgetData = typeof widgetValue === 'string' ? JSON.parse(widgetValue) : widgetValue;
                     const image = this.extractImageData(widgetData);
-                    if (image) return image;
+                    if (image?.src) return image.src;
                 } catch (error) {
                     // Игнорируем ошибки
                 }
@@ -765,3 +765,8 @@ export class OzonApiService {
         return '';
     }
 }
+
+// Создание и экспорт инстанса по умолчанию
+export const ozonApiService = new OzonApiService();
+
+export default OzonApiService;

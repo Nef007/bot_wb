@@ -98,7 +98,7 @@ export function createCategoryComposer() {
 
     // Обработчики callback queries
     composer.callbackQuery('add_product', async (ctx) => {
-        await productController.startAddProduct(ctx);
+        await productController.add(ctx);
     });
 
     composer.callbackQuery(/^product_detail_from_my_(\d+)$/, async (ctx) => {

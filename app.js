@@ -12,6 +12,8 @@ import { TelegramNotificationService } from './services/telegramNotificationServ
 import { notificationManager } from './services/notificationManager.js';
 import { monitoringOrchestrator } from './services/monitoringOrchestrator.js';
 
+import addProductConversation from './conversations/addProduct.js';
+
 const yooMoneyService = new YooMoneyService();
 
 // Настройка хранилища сессий (если используется FileAdapter)
@@ -31,6 +33,8 @@ async function start() {
     // Middleware
     bot.use(session({ initial: () => ({}), storage }));
     bot.use(conversations());
+
+    bot.use(createConversation(addProductConversation, 'addProductConversation'));
 
     mainRouter.forEach((createComposerFunc) => bot.use(createComposerFunc())); // Возвращаем использование mainRouter
 
@@ -61,13 +65,13 @@ async function start() {
     // Обработчики для graceful shutdown
     process.on('SIGINT', async () => {
         console.log('🛑 Received SIGINT, shutting down gracefully...');
-        monitoringOrchestrator.startAllMonitoring();
+        monitoringOrchestrator.stopAllMonitoring();
         process.exit(0);
     });
 
     process.on('SIGTERM', async () => {
         console.log('🛑 Received SIGTERM, shutting down gracefully...');
-        monitoringOrchestrator.startAllMonitoring();
+        monitoringOrchestrator.stopAllMonitoring();
         process.exit(0);
     });
 

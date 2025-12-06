@@ -6,7 +6,6 @@ export const productModel = {
      */
     // Временно замените метод upsert на эту версию в productModel
     upsert(productData) {
-        console.log('🚀 ~ file: productModel.js:9 ~ productData:', productData);
         const db = getDB();
 
         // Если category_id не указан или равен 0, используем системную категорию
@@ -21,22 +20,21 @@ export const productModel = {
                 .prepare(
                     `
                 INSERT INTO products 
-                (id, name, brand, brand_id, category_id, current_price, rating, 
-                 feedbacks_count, image_url, supplier)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                (id, name, brand,  category_id, current_price, rating, 
+                 feedbacks_count, image_url,  marketplace)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             `
                 )
                 .run(
-                    productData.id,
+                    Number(productData.id),
                     productData.name,
-                    productData.brand,
-                    productData.brandId,
+                    productData.brand || 'Неизвестно',
                     categoryId, // Используем обработанный category_id
                     productData.current_price,
                     productData.rating || 0,
                     productData.feedbacks_count || 0,
                     productData.image_url,
-                    productData.supplier
+                    productData.marketplace
                 );
         }
 

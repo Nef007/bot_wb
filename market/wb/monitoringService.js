@@ -343,7 +343,7 @@ export class WBPriceMonitoringService extends BaseMonitoringService {
 
     async monitorProducts() {
         try {
-            const activeProductSubscriptions = await userProductSubscriptionModel.findAllActive();
+            const activeProductSubscriptions = await userProductSubscriptionModel.findAllActive('wb');
 
             if (activeProductSubscriptions.length === 0) {
                 console.log(`ℹ️ Нет активных подписок на товары для мониторинга`);

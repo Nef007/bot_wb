@@ -1,10 +1,11 @@
-// services/ozonPriceMonitoringService.js
 import { BaseMonitoringService } from '../baseMonitoringService.js';
+import { PriceUtils } from '../wb/utils/priceUtils.js';
 import { OzonApiService } from './api.js';
 import { ozonCategoryModel } from '../../db/models/ozonCategoryModel.js';
 import { userCategorySubscriptionModel } from '../../db/models/userCategorySubscriptionModel.js';
 import { productModel } from '../../db/models/productModel.js';
 import { priceHistoryModel } from '../../db/models/priceHistoryModel.js';
+import { userProductSubscriptionModel } from '../../db/models/userProductSubscriptionModel.js';
 
 export class OzonPriceMonitoringService extends BaseMonitoringService {
     constructor() {
@@ -27,31 +28,152 @@ export class OzonPriceMonitoringService extends BaseMonitoringService {
             this.isRunning = true;
             console.log(`🔄 Запуск мониторинга ${this.serviceName}...`);
 
-            // Получаем все активные подписки
-            const subscriptions = await userCategorySubscriptionModel.findAllActive();
-            const ozonSubscriptions = subscriptions.filter(
-                (sub) => sub.catalog_type === 'ozon' || sub.query?.includes('ozon')
-            );
+            // Мониторинг категорий
+            //  await this.monitorCategories();
 
-            console.log(`📊 Найдено ${ozonSubscriptions.length} активных подписок Ozon`);
-
-            // Обрабатываем каждую подписку
-            for (const subscription of ozonSubscriptions) {
-                try {
-                    await this.processSubscription(subscription);
-                    await this.delay(this.scanDelay); // Задержка между категориями
-                } catch (error) {
-                    console.error(`❌ Ошибка обработки подписки ${subscription.id}:`, error);
-                }
-            }
+            // Мониторинг отдельных товаров
+            await this.monitorProducts();
 
             console.log(`✅ Мониторинг ${this.serviceName} завершен`);
         } catch (error) {
-            console.error(`❌ Ошибка мониторинга ${this.serviceName}:`, error);
+            console.error(`❌ Критическая ошибка мониторинга ${this.serviceName}:`, error);
             throw error;
         } finally {
             this.isRunning = false;
         }
+    }
+
+    async monitorProducts() {
+        try {
+            const activeProductSubscriptions = await userProductSubscriptionModel.findAllActive('ozon');
+
+            if (activeProductSubscriptions.length === 0) {
+                console.log(`ℹ️ Нет активных подписок на товары для мониторинга`);
+                return;
+            }
+
+            console.log(`📦 ${this.serviceName}: найдено подписок на товары: ${activeProductSubscriptions.length}`);
+
+            // Группируем по товарам для избежания дублирования запросов
+            const productsMap = new Map();
+            activeProductSubscriptions.forEach((subscription) => {
+                if (!productsMap.has(subscription.product_url)) {
+                    productsMap.set(subscription.product_url, []);
+                }
+                productsMap.get(subscription.product_url).push(subscription);
+            });
+
+            // Обрабатываем товары
+            const processingPromises = Array.from(productsMap.entries()).map(async ([productNmId, subscriptions]) => {
+                try {
+                    await this.scanAndProcessProduct(productNmId, subscriptions);
+                    await this.delay(1000); // Задержка между запросами
+                } catch (error) {
+                    console.error(`❌ Ошибка обработки товара ${productNmId}:`, error.message);
+                }
+            });
+
+            await Promise.allSettled(processingPromises);
+        } catch (error) {
+            console.error(`❌ Ошибка мониторинга товаров:`, error);
+        }
+    }
+
+    async scanAndProcessProduct(productNmId, subscriptions) {
+        try {
+            console.log(`🔍 Сканируем товар: ${productNmId}`);
+            console.log(`👥 Подписчиков: ${subscriptions.length}`);
+
+            const productData = await this.apiService.fetchProductDetail(productNmId);
+
+            if (!productData) {
+                console.log(`❌ Товар ${productNmId} не найден`);
+                return;
+            }
+
+            // Нормализуем данные товара
+
+            await this.processProduct(productData, subscriptions, { name: 'Отдельный товар' });
+
+            // Обновляем время последнего сканирования для всех подписок на этот товар
+            const updatePromises = subscriptions.map((subscription) =>
+                userProductSubscriptionModel.updateLastScan(subscription.id)
+            );
+
+            await Promise.allSettled(updatePromises);
+        } catch (error) {
+            console.error(`❌ Ошибка сканирования товара ${productNmId}:`, error.message);
+        }
+    }
+
+    async processProduct(product, subscriptions, category) {
+        try {
+            if (!this.isValidProduct(product)) {
+                return;
+            }
+
+            await productModel.upsert(product);
+
+            const lastPriceRecord = await priceHistoryModel.getLastPrice(product.id);
+            const lastPrice = lastPriceRecord?.price;
+
+            if (lastPrice === null || product.current_price !== lastPrice) {
+                console.log(`💰 Изменение цены: ${product.id} ${lastPrice || 'новый'} → ${product.current_price}`);
+
+                await priceHistoryModel.create(product.id, product.current_price);
+
+                if (lastPrice !== null) {
+                    await this.checkAndSendNotifications(product, lastPrice, subscriptions, category);
+                }
+            }
+        } catch (error) {
+            console.error(`❌ Ошибка обработки товара ${product.id}:`, error.message);
+        }
+    }
+
+    isValidProduct(product) {
+        return product.id && product.current_price && product.current_price > 0;
+    }
+
+    async checkAndSendNotifications(product, oldPrice, subscriptions, category) {
+        const priceChange = PriceUtils.calculatePriceChange(oldPrice, product.current_price);
+
+        if (!PriceUtils.isPriceChangeSignificant(oldPrice, product.current_price)) {
+            return;
+        }
+
+        const subscriptionsToNotify = subscriptions.filter(
+            (subscription) => priceChange <= -subscription.alert_threshold
+        );
+
+        if (subscriptionsToNotify.length === 0) {
+            return;
+        }
+
+        console.log(`📨 Найдено ${subscriptionsToNotify.length} подписок для уведомления о товаре ${product.id}`);
+
+        const lastTwoPrices = await priceHistoryModel.getLastTwoPrices(product.id);
+        const [currentRecord, previousRecord] = lastTwoPrices || [];
+
+        // Используем notificationManager вместо прямого доступа к telegramNotificationService
+        subscriptionsToNotify.forEach((subscription) => {
+            const alert = {
+                user_id: subscription.user_id,
+                product_id: product.id,
+                product_name: product.name,
+                brand: product.brand,
+                image_url: product.image_url,
+                old_price: oldPrice,
+                new_price: product.current_price,
+                old_time: previousRecord?.created_at || new Date(),
+                new_time: currentRecord?.created_at || new Date(),
+                percent_change: priceChange,
+                threshold: subscription.alert_threshold,
+            };
+
+            this.saveAlertToDatabase(alert);
+            notificationManager.sendPriceAlert(alert, category.name);
+        });
     }
 
     /**
