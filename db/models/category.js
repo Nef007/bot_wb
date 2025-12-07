@@ -154,6 +154,7 @@ export const categoryModel = {
      * Получить категории по parent_id
      */
     findByParentId(parentId, catalog_type) {
+        console.log('🚀 ~ file: category.js:157 ~ parentId, catalog_type:', parentId, catalog_type);
         const db = getDB();
         if (parentId === null) {
             return db

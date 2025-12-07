@@ -194,7 +194,6 @@ async function addProductConversation(conversation, ctx) {
             });
             return;
         }
-        console.log('🚀 ~ file: addProduct.js:248 ~ productData:', productData);
 
         // Шаг 6: Подтверждение добавления
         await ctx.api.editMessageText(

@@ -17,7 +17,6 @@ export class WbCategorySyncService {
         try {
             console.log('🔄 Синхронизация категорий с Wildberries...');
             const categories = await this.apiService.fetchCategories();
-            console.log('🚀 ~ file: syncCategoryService.js:20 ~ categories:', categories);
 
             // Сохраняем текущее состояние подписок перед синхронизацией
             const activeCategoriesBeforeSync = await this.categoryModel.getActiveCategories();

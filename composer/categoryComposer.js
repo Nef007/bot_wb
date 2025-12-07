@@ -1,3 +1,4 @@
+// composers/categoryComposer.js
 import { Composer } from 'grammy';
 import { categoryController } from '../controllers/categoryController.js';
 import { productController } from '../controllers/productController.js';
@@ -5,51 +6,47 @@ import { productController } from '../controllers/productController.js';
 export function createCategoryComposer() {
     const composer = new Composer();
 
-    // Меню категорий
-    composer.callbackQuery('categories_menu', async (ctx) => {
-        await categoryController.startCategoryConversation(ctx, null, ctx.callbackQuery.message.message_id);
+    // Старт conversation для категорий
+    composer.callbackQuery(['start_categories', 'categories_menu'], async (ctx) => {
+        await categoryController.startCategoryConversation(ctx);
         await ctx.answerCallbackQuery();
     });
 
-    // Навигация по категориям
-    composer.callbackQuery(/^category_(\d+)$/, async (ctx) => {
-        const [, categoryId] = ctx.match;
-        await categoryController.startCategoryConversation(
+    // Навигация по категориям (с marketType в callback_data)
+    composer.callbackQuery(/^category_(wb|ozon)_(\d+)$/, async (ctx) => {
+        const marketType = ctx.match[1];
+        const categoryId = ctx.match[2];
+
+        await categoryController.showCategories(
             ctx,
             parseInt(categoryId),
-            ctx.callbackQuery.message.message_id
+            ctx.callbackQuery.message.message_id,
+            marketType
         );
         await ctx.answerCallbackQuery();
     });
 
-    // Подписка на категорию
-    composer.callbackQuery(/^subscribe_(\d+)$/, async (ctx) => {
+    // Показать детали категории (для неподписанных)
+    composer.callbackQuery(/^show_category_detail_(\d+)$/, async (ctx) => {
         const [, categoryId] = ctx.match;
         await categoryController.showCategoryDetail(ctx, parseInt(categoryId), ctx.callbackQuery.message.message_id);
         await ctx.answerCallbackQuery();
     });
 
-    // Настройка подписки
-    composer.callbackQuery(/^configure_subscribe_(\d+)$/, async (ctx) => {
-        const [, categoryId] = ctx.match;
-        // Здесь будет логика настройки подписки
-        await ctx.answerCallbackQuery({ text: '⚙️ Настройка подписки' });
-    });
-
-    // Подписка на категорию (из детального просмотра)
+    // Выполнение подписки (сразу при нажатии кнопки "Подписаться")
     composer.callbackQuery(/^subscribe_category_(\d+)$/, async (ctx) => {
         const [, categoryId] = ctx.match;
         await categoryController.subscribeToCategory(ctx, parseInt(categoryId), ctx.callbackQuery.message.message_id);
     });
 
-    // Детали подписки
+    // Детали подписки (обычный переход)
     composer.callbackQuery(/^subscription_detail_(\d+)$/, async (ctx) => {
         const [, categoryId] = ctx.match;
         await categoryController.showSubscriptionDetail(
             ctx,
             parseInt(categoryId),
             ctx.callbackQuery.message.message_id,
-            false // Обычный переход (не из "Мои подписки")
+            false
         );
         await ctx.answerCallbackQuery();
     });
@@ -66,13 +63,6 @@ export function createCategoryComposer() {
         await ctx.answerCallbackQuery();
     });
 
-    // Пагинация подписок
-    composer.callbackQuery(/^subscriptions_page_(\d+)$/, async (ctx) => {
-        const [, page] = ctx.match;
-        await categoryController.showMySubscriptionsPage(ctx, parseInt(page), ctx.callbackQuery.message.message_id);
-        await ctx.answerCallbackQuery();
-    });
-
     // Детали подписки из "Мои подписки"
     composer.callbackQuery(/^subscription_detail_from_my_(\d+)$/, async (ctx) => {
         const [, categoryId] = ctx.match;
@@ -80,7 +70,7 @@ export function createCategoryComposer() {
             ctx,
             parseInt(categoryId),
             ctx.callbackQuery.message.message_id,
-            true // Указываем что пришли из "Мои подписки"
+            true
         );
         await ctx.answerCallbackQuery();
     });
@@ -100,7 +90,7 @@ export function createCategoryComposer() {
         await next();
     });
 
-    // Обработчики callback queries
+    // Обработчики callback queries для товаров
     composer.callbackQuery('add_product', async (ctx) => {
         await productController.add(ctx);
     });
